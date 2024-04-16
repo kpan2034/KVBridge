@@ -4,3 +4,5 @@ run:
 build: 
 	go build -o kvbridge main.go
 
+clean:
+	rm -rf ./kvbridge
