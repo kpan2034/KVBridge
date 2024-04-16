@@ -7,10 +7,10 @@ import (
 
 // Logger Interface to support
 type Logger interface {
-	Debug(string, ...interface{})
-	Info(string, ...interface{})
-	Error(string, ...interface{})
-	Fatal(string, ...interface{})
+	Debugf(string, ...interface{})
+	Infof(string, ...interface{})
+	Errorf(string, ...interface{})
+	Fatalf(string, ...interface{})
 }
 
 type LogLevel int
@@ -45,18 +45,18 @@ func NewZapLogger(logPath string, level LogLevel) Logger {
 	return zl
 }
 
-func (zl *ZapLogger) Debug(template string, args ...interface{}) {
+func (zl *ZapLogger) Debugf(template string, args ...interface{}) {
 	zl.sugar.Debugf(template, args)
 }
 
-func (zl *ZapLogger) Info(template string, args ...interface{}) {
+func (zl *ZapLogger) Infof(template string, args ...interface{}) {
 	zl.sugar.Infof(template, args)
 }
 
-func (zl *ZapLogger) Error(template string, args ...interface{}) {
+func (zl *ZapLogger) Errorf(template string, args ...interface{}) {
 	zl.sugar.Errorf(template, args)
 }
 
-func (zl *ZapLogger) Fatal(template string, args ...interface{}) {
+func (zl *ZapLogger) Fatalf(template string, args ...interface{}) {
 	zl.sugar.Fatalf(template, args)
 }

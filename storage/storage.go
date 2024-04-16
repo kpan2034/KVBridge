@@ -9,6 +9,7 @@ import (
 type StorageEngine interface {
 	Set(key []byte, value []byte) error
 	Get(key []byte) ([]byte, error)
+	Close() error
 }
 
 type PebbleStorageManager struct {
@@ -36,8 +37,19 @@ func (pb *PebbleStorageManager) Init() (err error) {
 	return nil
 }
 
+/* TODO(kpan): I'm pretty sure the number of memory allocations in the set path kill performance.
+* Likely need to abstract away direct use of the underlying PebbleDB
+* Instead, use some sort of intermediate buffer to minimize number of allocations
+* However, note that this is a storage-level optimization that we can look into later
+ */
 func (pb *PebbleStorageManager) Set(key []byte, value []byte) error {
 	err := pb.db.Set(key, value, &pebble.WriteOptions{})
+	if err != nil {
+		return err
+	}
+
+	// Flush it always for now -- need to change this obv
+	err = pb.db.Flush()
 	if err != nil {
 		return err
 	}
@@ -45,10 +57,14 @@ func (pb *PebbleStorageManager) Set(key []byte, value []byte) error {
 }
 
 func (pb *PebbleStorageManager) Get(key []byte) ([]byte, error) {
-	value, _, err := pb.db.Get(key)
-	// defer closer.Close()
+	value, closer, err := pb.db.Get(key)
 	if err != nil {
 		return nil, err
 	}
+	defer closer.Close()
 	return value, nil
+}
+
+func (pb *PebbleStorageManager) Close() error {
+	return pb.db.Close()
 }

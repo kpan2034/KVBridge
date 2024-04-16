@@ -29,7 +29,7 @@ func (config *KVNodeConfig) Build() *KVNode {
 	// Initialize storage engine
 	storage, err := storage.NewPebbleStorageEngine()
 	if err != nil {
-		logger.Fatal("could not init storage engine: %v", err)
+		logger.Fatalf("could not init storage engine: %v", err)
 	}
 
 	// Return the node

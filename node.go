@@ -20,12 +20,15 @@ type KVNode struct {
 func (node *KVNode) Start() error {
 	// Do some setup stuff here
 	addr := node.config.addr
+
+	// Defer cleanup stuff here
+	defer node.storage.Close()
 	// Initalize listener
-	node.logger.Debug("started server at %s", addr)
+	node.logger.Debugf("started server at %s", addr)
 	err := redcon.ListenAndServe(addr,
 		func(conn redcon.Conn, cmd redcon.Command) {
 			command := string(cmd.Args[0])
-			node.logger.Debug("received command: %v", command)
+			node.logger.Debugf("received command: %v", command)
 			switch strings.ToLower(command) {
 			default:
 				// node.logger.Error("unknown command: %v", command)
@@ -55,7 +58,8 @@ func (node *KVNode) Start() error {
 				key := cmd.Args[1]
 				value, err := node.storage.Get(key)
 				if err != nil {
-					conn.WriteError(fmt.Sprintf("ERR could not get (%s = %s)", string(key), string(value)))
+					conn.WriteError(fmt.Sprintf("ERR could not get %s", string(key)))
+					return
 				}
 				conn.WriteBulk(value)
 			case "del", "publish", "subscribe", "psubscribe":
@@ -64,16 +68,16 @@ func (node *KVNode) Start() error {
 		},
 		func(conn redcon.Conn) bool {
 			// Use this function to accept or deny the connection.
-			node.logger.Debug("accept: %s", conn.RemoteAddr())
+			node.logger.Debugf("accept: %s", conn.RemoteAddr())
 			return true
 		},
 		func(conn redcon.Conn, err error) {
 			// This is called when the connection has been closed
-			node.logger.Debug("closed: %s, err: %v", conn.RemoteAddr(), err)
+			node.logger.Debugf("closed: %s, err: %v", conn.RemoteAddr(), err)
 		},
 	)
 	if err != nil {
-		node.logger.Fatal("", err)
+		node.logger.Fatalf("", err)
 	}
 
 	return nil
