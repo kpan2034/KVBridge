@@ -15,6 +15,9 @@ type KVNode struct {
 	address string
 	logger  log.Logger
 	storage storage.StorageEngine
+	state   State
+	// handler inter-node communication
+	messager Messager
 }
 
 func (node *KVNode) Start() error {
@@ -23,8 +26,14 @@ func (node *KVNode) Start() error {
 
 	// Defer cleanup stuff here
 	defer node.storage.Close()
+
+	// Initialize inter-node communication here
+
 	// Initalize listener
 	node.logger.Debugf("started server at %s", addr)
+
+	// TODO(kpan) Should probably make a mux, set it up and launch a separate goroutine
+	// where the mux listens and serves clients
 	err := redcon.ListenAndServe(addr,
 		func(conn redcon.Conn, cmd redcon.Command) {
 			command := string(cmd.Args[0])
