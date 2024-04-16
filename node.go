@@ -62,6 +62,16 @@ func (node *KVNode) Start() error {
 					return
 				}
 				conn.WriteBulk(value)
+			case "config":
+				conn.WriteArray(8)
+				conn.WriteString("\"tcp-keepalive\"")
+				conn.WriteString("\"0\"")
+				conn.WriteString("\"io-threads\"")
+				conn.WriteString("\"1\"")
+				conn.WriteString("\"save\"")
+				conn.WriteString("\"3600 1 300 100 60 10000\"")
+				conn.WriteString("\"appendonly\"")
+				conn.WriteString("\"no\"")
 			case "del", "publish", "subscribe", "psubscribe":
 				conn.WriteError("ERR unsupported operation:" + string(cmd.Args[0]))
 			}
