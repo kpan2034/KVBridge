@@ -1,10 +1,14 @@
 package main
 
-import "KVBridge/node"
+import (
+	"KVBridge/config"
+	"KVBridge/node"
+)
 
 // Entry point for a backend node, which starts relevant services.
 // For now it opens up a simple backend server that listens for a client.
 func main() {
-	primary := node.DefaultConfig().Build()
-	primary.Start()
+	config := config.NewConfigFromEnv()
+	node := node.NewKVNode(config)
+	node.Start()
 }

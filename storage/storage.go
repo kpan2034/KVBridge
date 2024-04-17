@@ -1,7 +1,8 @@
 package storage
 
 import (
-	"KVBridge/log"
+	. "KVBridge/environment"
+
 	"github.com/cockroachdb/pebble"
 )
 
@@ -13,13 +14,14 @@ type StorageEngine interface {
 }
 
 type PebbleStorageManager struct {
-	db     *pebble.DB
-	logger log.Logger
+	*Environment
+	db *pebble.DB
 }
 
 // Get the wrapper around pebble
-func NewPebbleStorageEngine() (StorageEngine, error) {
-	pb := &PebbleStorageManager{}
+func NewPebbleStorageEngine(env *Environment) (StorageEngine, error) {
+	newEnv := env.WithLogger(env.Named("storage"))
+	pb := &PebbleStorageManager{newEnv, nil}
 
 	err := pb.Init()
 	if err != nil {
@@ -30,7 +32,8 @@ func NewPebbleStorageEngine() (StorageEngine, error) {
 }
 
 func (pb *PebbleStorageManager) Init() (err error) {
-	pb.db, err = pebble.Open("./tmp/storage", &pebble.Options{})
+	storagePath := pb.Config.DataPath
+	pb.db, err = pebble.Open(storagePath, &pebble.Options{})
 	if err != nil {
 		return err
 	}
@@ -43,6 +46,7 @@ func (pb *PebbleStorageManager) Init() (err error) {
 * However, note that this is a storage-level optimization that we can look into later
  */
 func (pb *PebbleStorageManager) Set(key []byte, value []byte) error {
+	pb.Debugf("set request: key: %v, value: %v", string(key), string(value))
 	err := pb.db.Set(key, value, &pebble.WriteOptions{})
 	if err != nil {
 		return err
@@ -53,18 +57,22 @@ func (pb *PebbleStorageManager) Set(key []byte, value []byte) error {
 	if err != nil {
 		return err
 	}
+	pb.Debugf("set response: %v", err)
 	return nil
 }
 
 func (pb *PebbleStorageManager) Get(key []byte) ([]byte, error) {
+	pb.Debugf("get request: key: %v", string(key))
 	value, closer, err := pb.db.Get(key)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
+	pb.Debugf("get response: key: %v, value: %v", string(key), string(value))
 	return value, nil
 }
 
+// TODO: call this when handling graceful shutdown
 func (pb *PebbleStorageManager) Close() error {
 	return pb.db.Close()
 }
