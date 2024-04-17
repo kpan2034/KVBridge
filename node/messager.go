@@ -5,7 +5,10 @@ import (
 	"KVBridge/log"
 	pb "KVBridge/proto/compiled/proto-ping"
 	"context"
+	"fmt"
+	"io"
 	"net"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -48,6 +51,89 @@ func (m *Messager) Ping(ctx context.Context, in *pb.PingRequest) (*pb.PingRespon
 	return &pb.PingResponse{
 		Resp: "hello",
 	}, nil
+}
+
+func (m *Messager) PingStream(stream pb.PingService_PingStreamServer) error {
+	m.Logger.Debugf("server: starting ping stream")
+	counter := 1
+
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		msg := in.GetMsg()
+		m.Logger.Debugf("server: recv count: %d, msg: %s", counter, msg)
+		resp := "hello" + fmt.Sprintf("%d", counter)
+
+		if err = stream.Send(&pb.PingResponse{
+			Resp: resp,
+		}); err != nil {
+			m.Logger.Debugf("server: send error: %v", err)
+			return err
+		}
+	}
+}
+
+func (m *Messager) RunPingStream(ctx context.Context) error {
+	m.Logger.Debugf("starting client ping stream")
+
+	// Set up context
+	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+
+	// Set up sending stream
+	stream, err := m.client.PingStream(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Initialie wait channel
+	waitc := make(chan struct{})
+
+	// Set up recv'ing stream
+	go func() {
+		counter := 0
+		defer func() {
+			m.Logger.Debugf("client: closing recv stream")
+			close(waitc)
+		}()
+		for {
+			in, err := stream.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				m.Logger.Errorf("client: recv error: %v", err)
+				return
+			}
+			msg := in.GetResp()
+			m.Logger.Debugf("client: recv count: %d, msg: %s", counter, msg)
+			counter++
+		}
+	}()
+
+	// run send for 100 iterations
+	for i := 0; i < 100; i++ {
+		msg := &pb.PingRequest{
+			Msg: "hi" + fmt.Sprintf("%d", i),
+		}
+		if err := stream.Send(msg); err != nil {
+			return err
+		}
+		m.Logger.Debugf("client: send i: %d, msg: %s", i, msg)
+	}
+	stream.CloseSend()
+	<-waitc
+	return nil
+}
+
+func serialize(s string) {
+	panic("unimplemented")
 }
 
 func (m *Messager) Start() error {

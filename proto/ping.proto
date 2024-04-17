@@ -4,7 +4,11 @@ package kvbridge;
 
 option go_package = "./proto-ping";
 
-service PingService { rpc Ping(PingRequest) returns (PingResponse); }
+service PingService {
+  rpc Ping(PingRequest) returns (PingResponse);
+
+  rpc PingStream(stream PingRequest) returns (stream PingResponse);
+}
 
 message PingRequest { string msg = 1; }
 
