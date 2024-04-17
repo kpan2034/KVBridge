@@ -21,7 +21,7 @@ type KVNode struct {
 	storage storage.StorageEngine
 	state   *State
 	// handle inter-node communication
-	messager *Messager
+	*Messager
 }
 
 func (node *KVNode) Start() error {
@@ -33,7 +33,7 @@ func (node *KVNode) Start() error {
 
 	// Initialize inter-node communication here
 	// TODO(kpan): add sync primitives and graceful closing of servers
-	go node.messager.Start()
+	go node.Messager.Start()
 
 	// Initalize listener
 	node.logger.Debugf("started server at %s", addr)
@@ -67,7 +67,7 @@ func (node *KVNode) Start() error {
 				}
 
 				// Ping other node (testing gossip)
-				node.messager.PingRequest(context.Background(), &pb.PingRequest{
+				node.Messager.PingRequest(context.Background(), &pb.PingRequest{
 					Msg: "hi",
 				})
 				conn.WriteString("OK")
@@ -83,7 +83,7 @@ func (node *KVNode) Start() error {
 					return
 				}
 				// Ping other node (testing gossip)
-				_, err = node.messager.PingRequest(context.Background(), &pb.PingRequest{
+				_, err = node.Messager.PingRequest(context.Background(), &pb.PingRequest{
 					Msg: "hi",
 				})
 				if err != nil {
@@ -149,7 +149,7 @@ func NewKVNode(config *config.Config) *KVNode {
 		address:  addr,
 		logger:   logger,
 		storage:  storage,
-		messager: messager,
+		Messager: messager,
 	}
 
 	return node
