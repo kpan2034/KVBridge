@@ -4,6 +4,7 @@ import (
 	"KVBridge/config"
 	"KVBridge/environment"
 	"KVBridge/log"
+	"KVBridge/messager"
 	pb "KVBridge/proto/compiled/proto-ping"
 	"KVBridge/storage"
 	"context"
@@ -15,13 +16,15 @@ import (
 
 // The main struct that represents a node in a KVBridge cluster
 type KVNode struct {
-	config  *config.Config
-	address string
+	// stores config with which this node was started
+	config *config.Config
+	// logger instance
 	logger  log.Logger
 	storage storage.StorageEngine
-	state   *State
-	// handle inter-node communication
-	*Messager
+	// State contains any persistent node state
+	State
+	// messager handle inter-node communication
+	*messager.Messager
 }
 
 func (node *KVNode) Start() error {
@@ -123,8 +126,6 @@ func (node *KVNode) Start() error {
 
 // Returns a KVNode with the specified configuration
 func NewKVNode(config *config.Config) *KVNode {
-	addr := config.Address
-
 	// Initialize logger
 	logPath := config.LogPath
 	logger := log.NewZapLogger(logPath, log.DebugLogLevel)
@@ -141,15 +142,15 @@ func NewKVNode(config *config.Config) *KVNode {
 	}
 
 	// Initialize messager
-	messager := NewMessager(env)
+	messager := messager.NewMessager(env)
 
 	// Return the node
 	node := &KVNode{
 		config:   config,
-		address:  addr,
 		logger:   logger,
 		storage:  storage,
 		Messager: messager,
+		State:    getInititalState(),
 	}
 
 	return node
