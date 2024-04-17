@@ -2,6 +2,8 @@ package log
 
 import (
 	"log"
+	"os"
+	"path/filepath"
 
 	"go.uber.org/zap"
 )
@@ -32,6 +34,11 @@ func NewZapLogger(logPath string, level LogLevel) Logger {
 	config := zap.NewDevelopmentConfig()
 	if level == ErrorLogLevel {
 		config = zap.NewProductionConfig()
+	}
+
+	err := os.MkdirAll(filepath.Dir(logPath), os.ModePerm)
+	if err != nil {
+		log.Fatalf("could not open logfile: %v", err)
 	}
 	config.OutputPaths = []string{logPath}
 
