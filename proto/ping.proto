@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package kvbridge;
+
+option go_package = "./ping";
+
+service PingService {
+  rpc Ping(PingRequest) returns (PingResponse);
+
+  rpc PingStream(stream PingRequest) returns (stream PingResponse);
+}
+
+message PingRequest { string msg = 1; }
+
+message PingResponse { string resp = 1; }

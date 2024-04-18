@@ -1,8 +1,13 @@
-package main
+package node
 
 import (
+	"KVBridge/config"
+	"KVBridge/environment"
 	"KVBridge/log"
+	"KVBridge/messager"
+	"KVBridge/state"
 	"KVBridge/storage"
+	"context"
 	"fmt"
 	"strings"
 
@@ -11,24 +16,36 @@ import (
 
 // The main struct that represents a node in a KVBridge cluster
 type KVNode struct {
-	config  *KVNodeConfig
-	address string
-	logger  log.Logger
+	// contains config, logger, state, etc
+	// wrapper in an environment to make it easier to pass around to other parts of the system
+	*environment.Environment
+	// storage engine
 	storage storage.StorageEngine
+	// messager handle inter-node communication
+	*messager.Messager
 }
 
 func (node *KVNode) Start() error {
 	// Do some setup stuff here
-	addr := node.config.addr
+	addr := node.Config.Address
 
 	// Defer cleanup stuff here
 	defer node.storage.Close()
+
+	// Initialize inter-node communication here
+	// TODO(kpan): add sync primitives and graceful closing of servers
+	go node.Messager.Start()
+
 	// Initalize listener
-	node.logger.Debugf("started server at %s", addr)
+	node.Logger.Debugf("started server at %s", addr)
+
+	// TODO(kpan) Should probably make a mux, set it up and launch a separate goroutine
+	// where the mux listens and serves clients
+	redcon.NewServeMux()
 	err := redcon.ListenAndServe(addr,
 		func(conn redcon.Conn, cmd redcon.Command) {
 			command := string(cmd.Args[0])
-			node.logger.Debugf("received command: %v", command)
+			node.Logger.Debugf("received command: %v", command)
 			switch strings.ToLower(command) {
 			default:
 				// node.logger.Error("unknown command: %v", command)
@@ -49,6 +66,9 @@ func (node *KVNode) Start() error {
 				if err != nil {
 					conn.WriteError(fmt.Sprintf("ERR could not set (%s = %s)", string(key), string(value)))
 				}
+
+				// Ping other node (testing gossip)
+				_ = node.Messager.PingEverybody(context.Background())
 				conn.WriteString("OK")
 			case "get":
 				if len(cmd.Args) != 2 {
@@ -61,6 +81,14 @@ func (node *KVNode) Start() error {
 					conn.WriteError(fmt.Sprintf("ERR could not get %s", string(key)))
 					return
 				}
+				// Ping other node (testing gossip)
+				_ = node.Messager.PingEverybody(context.Background())
+				// _, err = node.Messager.PingRequest(context.Background(), &pb.PingRequest{
+				// 	Msg: "hi",
+				// })
+				// if err != nil {
+				// 	node.Logger.Errorf("err messaging node: %v", err)
+				// }
 				conn.WriteBulk(value)
 			case "config":
 				conn.WriteArray(8)
@@ -78,17 +106,49 @@ func (node *KVNode) Start() error {
 		},
 		func(conn redcon.Conn) bool {
 			// Use this function to accept or deny the connection.
-			node.logger.Debugf("accept: %s", conn.RemoteAddr())
+			node.Logger.Debugf("accept: %s", conn.RemoteAddr())
 			return true
 		},
 		func(conn redcon.Conn, err error) {
 			// This is called when the connection has been closed
-			node.logger.Debugf("closed: %s, err: %v", conn.RemoteAddr(), err)
+			node.Logger.Debugf("closed: %s, err: %v", conn.RemoteAddr(), err)
 		},
 	)
 	if err != nil {
-		node.logger.Fatalf("", err)
+		node.Logger.Fatalf("", err)
 	}
 
 	return nil
+}
+
+// Returns a KVNode with the specified configuration
+func NewKVNode(config *config.Config) *KVNode {
+	// Initialize logger
+	logPath := config.LogPath
+	logger := log.NewZapLogger(logPath, log.DebugLogLevel).Named(fmt.Sprintf("node@%v", config.Address))
+	sz := len(config.BootstrapServers)
+	state := state.GetInititalState(sz)
+
+	// Wrap all dependencies in an env
+	env := environment.New(logger, config, state)
+
+	logger.Debugf("creating kvnode with config: %v", config)
+
+	// Initialize storage engine
+	storage, err := storage.NewPebbleStorageEngine(env)
+	if err != nil {
+		logger.Fatalf("could not init storage engine: %v", err)
+	}
+
+	// Initialize messager
+	messager := messager.NewMessager(env)
+
+	// Return the node
+	node := &KVNode{
+		Environment: env,
+		storage:     storage,
+		Messager:    messager,
+	}
+
+	return node
 }

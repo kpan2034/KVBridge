@@ -1,8 +1,11 @@
 package log
 
 import (
-	"go.uber.org/zap"
 	"log"
+	"os"
+	"path/filepath"
+
+	"go.uber.org/zap"
 )
 
 // Logger Interface to support
@@ -11,6 +14,7 @@ type Logger interface {
 	Infof(string, ...interface{})
 	Errorf(string, ...interface{})
 	Fatalf(string, ...interface{})
+	Named(string) Logger
 }
 
 type LogLevel int
@@ -22,7 +26,7 @@ const (
 )
 
 type ZapLogger struct {
-	sugar *zap.SugaredLogger
+	*zap.SugaredLogger
 }
 
 // Logger implementation
@@ -31,6 +35,14 @@ func NewZapLogger(logPath string, level LogLevel) Logger {
 	if level == ErrorLogLevel {
 		config = zap.NewProductionConfig()
 	}
+
+	if logPath != "" && logPath != "stdout" {
+		err := os.MkdirAll(filepath.Dir(logPath), os.ModePerm)
+		if err != nil {
+			log.Fatalf("could not open logfile: %v", err)
+		}
+	}
+
 	config.OutputPaths = []string{logPath}
 
 	sugar, err := config.Build()
@@ -38,25 +50,16 @@ func NewZapLogger(logPath string, level LogLevel) Logger {
 		log.Fatalf("could not start logger: %v", err)
 	}
 
-	zl := &ZapLogger{
-		sugar: sugar.Sugar(),
-	}
+	// sugar = sugar.Named("main")
+
+	zl := &ZapLogger{sugar.Sugar()}
 
 	return zl
 }
 
-func (zl *ZapLogger) Debugf(template string, args ...interface{}) {
-	zl.sugar.Debugf(template, args)
-}
-
-func (zl *ZapLogger) Infof(template string, args ...interface{}) {
-	zl.sugar.Infof(template, args)
-}
-
-func (zl *ZapLogger) Errorf(template string, args ...interface{}) {
-	zl.sugar.Errorf(template, args)
-}
-
-func (zl *ZapLogger) Fatalf(template string, args ...interface{}) {
-	zl.sugar.Fatalf(template, args)
+// Returns a new logger with the segment 'name' appeneded
+func (zl *ZapLogger) Named(name string) Logger {
+	return &ZapLogger{
+		zl.Desugar().Named(name).Sugar(),
+	}
 }
