@@ -3,11 +3,13 @@ package messager
 import (
 	"KVBridge/environment"
 	"KVBridge/log"
-	pb "KVBridge/proto/compiled/proto-ping"
+	"KVBridge/proto/compiled/ping"
+	"KVBridge/proto/compiled/startup"
+	. "KVBridge/types"
 	"context"
 	"fmt"
-	"io"
 	"net"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -16,124 +18,63 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 )
 
-// go generate
 type Messager struct {
 	*environment.Environment
-	pb.UnimplementedPingServiceServer
-	client pb.PingServiceClient
-	conn   *grpc.ClientConn
+	ping.UnimplementedPingServiceServer
+	startup.UnimplementedStartupServiceServer
+	client_map map[NodeID]*Client
+	clients    []Client
+}
+
+// The messager has a client that is associated with each node
+// On startup, it talks to other nodes and maps them to a node id
+type Client struct {
+	*environment.Environment
+	*grpc.ClientConn
+	ping.PingServiceClient
+	startup.StartupServiceClient
 }
 
 func NewMessager(env *environment.Environment) *Messager {
 	l := env.Named("messager")
 	env = env.WithLogger(l)
-	addr := "localhost:50052"
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		l.Fatalf("did not connect: %v\n", err)
+	clients := make([]Client, 0, len(env.BootstrapServers))
+
+	// create a new client for each server in the config
+	for _, addr := range env.BootstrapServers {
+		if addr == env.Address {
+			continue
+		}
+		l.Debugf("creating client for: %v", addr)
+		// Set up a connection to that node.
+		conn, err := grpc.Dial(addr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithUnaryInterceptor(logging.UnaryClientInterceptor(InterceptorLogger(l))),
+		)
+		if err != nil {
+			l.Fatalf("did not connect: %v\n", err)
+		}
+		l.Debugf("connected to node at: %v\n", addr)
+
+		new_client := newClient(env.WithLogger(env.Named(addr)), conn)
+		clients = append(clients, new_client)
 	}
-	l.Debugf("connected to node at: %v\n", addr)
-	c := pb.NewPingServiceClient(conn)
+
 	m := &Messager{
 		Environment: env,
-		client:      c,
-		conn:        conn,
+		clients:     clients,
 	}
 	l.Debugf("creating new messager: %+v", m)
 	return m
 }
 
-func (m *Messager) Ping(ctx context.Context, in *pb.PingRequest) (*pb.PingResponse, error) {
-	m.Logger.Debugf("received ping: %v", in)
-	return &pb.PingResponse{
-		Resp: "hello",
-	}, nil
-}
-
-func (m *Messager) PingStream(stream pb.PingService_PingStreamServer) error {
-	m.Logger.Debugf("server: starting ping stream")
-	counter := 1
-
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		msg := in.GetMsg()
-		m.Logger.Debugf("server: recv count: %d, msg: %s", counter, msg)
-		resp := "hello" + fmt.Sprintf("%d", counter)
-
-		if err = stream.Send(&pb.PingResponse{
-			Resp: resp,
-		}); err != nil {
-			m.Logger.Debugf("server: send error: %v", err)
-			return err
-		}
+func newClient(env *environment.Environment, conn *grpc.ClientConn) Client {
+	return Client{
+		env,
+		conn,
+		ping.NewPingServiceClient(conn),
+		startup.NewStartupServiceClient(conn),
 	}
-}
-
-func (m *Messager) RunPingStream(ctx context.Context) error {
-	m.Logger.Debugf("starting client ping stream")
-
-	// Set up context
-	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-	defer cancel()
-
-	// Set up sending stream
-	stream, err := m.client.PingStream(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Initialie wait channel
-	waitc := make(chan struct{})
-
-	// Set up recv'ing stream
-	go func() {
-		counter := 0
-		defer func() {
-			m.Logger.Debugf("client: closing recv stream")
-			close(waitc)
-		}()
-		for {
-			in, err := stream.Recv()
-			if err == io.EOF {
-				return
-			}
-			if err != nil {
-				m.Logger.Errorf("client: recv error: %v", err)
-				return
-			}
-			msg := in.GetResp()
-			m.Logger.Debugf("client: recv count: %d, msg: %s", counter, msg)
-			counter++
-		}
-	}()
-
-	// run send for 100 iterations
-	for i := 0; i < 100; i++ {
-		msg := &pb.PingRequest{
-			Msg: "hi" + fmt.Sprintf("%d", i),
-		}
-		if err := stream.Send(msg); err != nil {
-			return err
-		}
-		m.Logger.Debugf("client: send i: %d, msg: %s", i, msg)
-	}
-	stream.CloseSend()
-	<-waitc
-	return nil
-}
-
-func serialize(s string) {
-	panic("unimplemented")
 }
 
 func (m *Messager) Start() error {
@@ -147,7 +88,7 @@ func (m *Messager) Start() error {
 			logging.UnaryServerInterceptor(InterceptorLogger(m.Logger)),
 		),
 	)
-	pb.RegisterPingServiceServer(s, m)
+	ping.RegisterPingServiceServer(s, m)
 	m.Logger.Debugf("ping server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		return err
@@ -157,14 +98,32 @@ func (m *Messager) Start() error {
 	return nil
 }
 
-func (m *Messager) PingRequest(ctx context.Context, in *pb.PingRequest) (*pb.PingResponse, error) {
-	m.Logger.Debugf("sending ping request: ctx: %v in: %v", ctx, in)
-	resp, err := m.client.Ping(ctx, in)
-	if err != nil {
-		m.Logger.Errorf("error response: %v", err)
+func (m *Messager) PingEverybody(ctx context.Context) interface{} {
+	// TODO: make this a buffered channel
+
+	wg := sync.WaitGroup{}
+
+	// Make async Ping requests
+	for _, client := range m.clients {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+			defer cancel()
+			resp, err := client.PingRequest(ctx, &ping.PingRequest{
+				Msg: fmt.Sprintf("hello from: %v", m.Address),
+			})
+			if err != nil {
+				m.Logger.Debugf("ping error: %v", err)
+				return
+			}
+			// Ideally you send the resp over a channel so that some receiver function can handle them
+			// as they come in, one at a time
+			m.Logger.Debugf("recv value: %+v", resp)
+		}()
 	}
-	m.Logger.Debugf("received ping response: resp: %v", resp)
-	return resp, err
+	wg.Wait()
+	return nil
 }
 
 func InterceptorLogger(l log.Logger) logging.Logger {

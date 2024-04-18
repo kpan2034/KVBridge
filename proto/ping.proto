@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package kvbridge;
 
-option go_package = "./proto-ping";
+option go_package = "./ping";
 
 service PingService {
   rpc Ping(PingRequest) returns (PingResponse);

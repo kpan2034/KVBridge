@@ -4,7 +4,7 @@
 // - protoc             v3.20.3
 // source: proto/ping.proto
 
-package proto_ping
+package ping
 
 import (
 	context "context"

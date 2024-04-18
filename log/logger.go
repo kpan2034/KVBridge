@@ -50,7 +50,7 @@ func NewZapLogger(logPath string, level LogLevel) Logger {
 		log.Fatalf("could not start logger: %v", err)
 	}
 
-	sugar = sugar.Named("main")
+	// sugar = sugar.Named("main")
 
 	zl := &ZapLogger{sugar.Sugar()}
 

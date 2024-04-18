@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package kvbridge;
+
+option go_package = "./startup";
+
+service StartupService {
+  rpc GetNodeInfo(GetNodeInfoRequest) returns (GetNodeInfoResponse);
+}
+
+message GetNodeInfoRequest {}
+message GetNodeInfoResponse { int32 id = 1; }

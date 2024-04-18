@@ -5,7 +5,7 @@ import (
 	"KVBridge/environment"
 	"KVBridge/log"
 	"KVBridge/messager"
-	pb "KVBridge/proto/compiled/proto-ping"
+	"KVBridge/state"
 	"KVBridge/storage"
 	"context"
 	"fmt"
@@ -16,20 +16,18 @@ import (
 
 // The main struct that represents a node in a KVBridge cluster
 type KVNode struct {
-	// stores config with which this node was started
-	config *config.Config
-	// logger instance
-	logger  log.Logger
+	// contains config, logger, state, etc
+	// wrapper in an environment to make it easier to pass around to other parts of the system
+	*environment.Environment
+	// storage engine
 	storage storage.StorageEngine
-	// State contains any persistent node state
-	State
 	// messager handle inter-node communication
 	*messager.Messager
 }
 
 func (node *KVNode) Start() error {
 	// Do some setup stuff here
-	addr := node.config.Address
+	addr := node.Config.Address
 
 	// Defer cleanup stuff here
 	defer node.storage.Close()
@@ -39,7 +37,7 @@ func (node *KVNode) Start() error {
 	go node.Messager.Start()
 
 	// Initalize listener
-	node.logger.Debugf("started server at %s", addr)
+	node.Logger.Debugf("started server at %s", addr)
 
 	// TODO(kpan) Should probably make a mux, set it up and launch a separate goroutine
 	// where the mux listens and serves clients
@@ -47,7 +45,7 @@ func (node *KVNode) Start() error {
 	err := redcon.ListenAndServe(addr,
 		func(conn redcon.Conn, cmd redcon.Command) {
 			command := string(cmd.Args[0])
-			node.logger.Debugf("received command: %v", command)
+			node.Logger.Debugf("received command: %v", command)
 			switch strings.ToLower(command) {
 			default:
 				// node.logger.Error("unknown command: %v", command)
@@ -70,9 +68,7 @@ func (node *KVNode) Start() error {
 				}
 
 				// Ping other node (testing gossip)
-				node.Messager.PingRequest(context.Background(), &pb.PingRequest{
-					Msg: "hi",
-				})
+				_ = node.Messager.PingEverybody(context.Background())
 				conn.WriteString("OK")
 			case "get":
 				if len(cmd.Args) != 2 {
@@ -86,12 +82,13 @@ func (node *KVNode) Start() error {
 					return
 				}
 				// Ping other node (testing gossip)
-				_, err = node.Messager.PingRequest(context.Background(), &pb.PingRequest{
-					Msg: "hi",
-				})
-				if err != nil {
-					node.logger.Errorf("err messaging node: %v", err)
-				}
+				_ = node.Messager.PingEverybody(context.Background())
+				// _, err = node.Messager.PingRequest(context.Background(), &pb.PingRequest{
+				// 	Msg: "hi",
+				// })
+				// if err != nil {
+				// 	node.Logger.Errorf("err messaging node: %v", err)
+				// }
 				conn.WriteBulk(value)
 			case "config":
 				conn.WriteArray(8)
@@ -109,16 +106,16 @@ func (node *KVNode) Start() error {
 		},
 		func(conn redcon.Conn) bool {
 			// Use this function to accept or deny the connection.
-			node.logger.Debugf("accept: %s", conn.RemoteAddr())
+			node.Logger.Debugf("accept: %s", conn.RemoteAddr())
 			return true
 		},
 		func(conn redcon.Conn, err error) {
 			// This is called when the connection has been closed
-			node.logger.Debugf("closed: %s, err: %v", conn.RemoteAddr(), err)
+			node.Logger.Debugf("closed: %s, err: %v", conn.RemoteAddr(), err)
 		},
 	)
 	if err != nil {
-		node.logger.Fatalf("", err)
+		node.Logger.Fatalf("", err)
 	}
 
 	return nil
@@ -128,10 +125,12 @@ func (node *KVNode) Start() error {
 func NewKVNode(config *config.Config) *KVNode {
 	// Initialize logger
 	logPath := config.LogPath
-	logger := log.NewZapLogger(logPath, log.DebugLogLevel)
+	logger := log.NewZapLogger(logPath, log.DebugLogLevel).Named(fmt.Sprintf("node@%v", config.Address))
+	sz := len(config.BootstrapServers)
+	state := state.GetInititalState(sz)
 
 	// Wrap all dependencies in an env
-	env := environment.New(logger, config)
+	env := environment.New(logger, config, state)
 
 	logger.Debugf("creating kvnode with config: %v", config)
 
@@ -146,11 +145,9 @@ func NewKVNode(config *config.Config) *KVNode {
 
 	// Return the node
 	node := &KVNode{
-		config:   config,
-		logger:   logger,
-		storage:  storage,
-		Messager: messager,
-		State:    getInititalState(),
+		Environment: env,
+		storage:     storage,
+		Messager:    messager,
 	}
 
 	return node
