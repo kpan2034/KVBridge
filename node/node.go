@@ -5,6 +5,7 @@ import (
 	"KVBridge/environment"
 	"KVBridge/log"
 	"KVBridge/messager"
+	"KVBridge/partitioner"
 	"KVBridge/state"
 	"KVBridge/storage"
 	"context"
@@ -23,6 +24,7 @@ type KVNode struct {
 	storage storage.StorageEngine
 	// messager handle inter-node communication
 	*messager.Messager
+	Partitioner partitioner.Partitioner
 }
 
 func (node *KVNode) Start() error {
@@ -122,15 +124,14 @@ func (node *KVNode) Start() error {
 }
 
 // Returns a KVNode with the specified configuration
-func NewKVNode(config *config.Config) *KVNode {
+func NewKVNode(config *config.Config) (*KVNode, error) {
 	// Initialize logger
 	logPath := config.LogPath
 	logger := log.NewZapLogger(logPath, log.DebugLogLevel).Named(fmt.Sprintf("node@%v", config.Address))
-	sz := len(config.BootstrapServers)
-	state := state.GetInititalState(sz)
+	init_state := state.GetInitialState(config)
 
 	// Wrap all dependencies in an env
-	env := environment.New(logger, config, state)
+	env := environment.New(logger, config, init_state)
 
 	logger.Debugf("creating kvnode with config: %v", config)
 
@@ -138,17 +139,26 @@ func NewKVNode(config *config.Config) *KVNode {
 	storage, err := storage.NewPebbleStorageEngine(env)
 	if err != nil {
 		logger.Fatalf("could not init storage engine: %v", err)
+		return nil, err
 	}
 
 	// Initialize messager
 	messager := messager.NewMessager(env)
+
+	// Initialize partitioner
+	partitioner, err := partitioner.GetNewPartitioner(init_state)
+	if err != nil {
+		logger.Fatalf("could not init partitioner: %v", err)
+		return nil, err
+	}
 
 	// Return the node
 	node := &KVNode{
 		Environment: env,
 		storage:     storage,
 		Messager:    messager,
+		Partitioner: partitioner,
 	}
 
-	return node
+	return node, nil
 }
