@@ -14,7 +14,9 @@ type Partitioner interface {
 }
 
 func GetNewPartitioner(s *state.State) (Partitioner, error) {
-	partitioner := SimplePartitioner{s}
+	// TODO: make partitioner choice an argument
+	//partitioner := SimplePartitioner{s}
+	partitioner := ConsistentHashPartitioner{s}
 	return &partitioner, nil
 }
 

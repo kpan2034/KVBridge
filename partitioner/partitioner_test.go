@@ -4,71 +4,50 @@ import (
 	"KVBridge/config"
 	"KVBridge/node"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 )
 
-func setupTest(t *testing.T) (teardownTest func(t *testing.T), node1, node2, node3 *node.KVNode) {
-	os.RemoveAll("./testing")
-	// Define configs for both nodes
-	c1 := &config.Config{
-		Address:          ":6379",
-		Grpc_address:     "localhost:50051",
-		LogPath:          "stdout",
-		DataPath:         "./testing/storage",
-		BootstrapServers: []string{"localhost:50051", "localhost:50052", "localhost:50053"},
-	}
-	c2 := &config.Config{
-		Address:          ":6380",
-		Grpc_address:     "localhost:50052",
-		LogPath:          "stdout",
-		DataPath:         "./testing/storage2",
-		BootstrapServers: []string{"localhost:50051", "localhost:50052", "localhost:50053"},
-	}
-	c3 := &config.Config{
-		Address:          ":6381",
-		Grpc_address:     "localhost:50053",
-		LogPath:          "stdout",
-		DataPath:         "./testing/storage3",
-		BootstrapServers: []string{"localhost:50051", "localhost:50052", "localhost:50053"},
-	}
+func setupTest(numNodes int, replicationFactor int, t *testing.T, testFolder string, addrStartPort int, grpcStartPort int) (func(t *testing.T), []*node.KVNode) {
+	os.RemoveAll(testFolder)
 
-	// Create and launch both KVNodes on separate goroutines
-	var err error
-	node1, err = node.NewKVNode(c1)
-	if err != nil {
-		t.Errorf("node1 creation failed: %v", err)
-	}
-	node2, err = node.NewKVNode(c2)
-	if err != nil {
-		t.Errorf("node2 creation failed: %v", err)
-	}
-	node3, err = node.NewKVNode(c3)
-	if err != nil {
-		t.Errorf("node3 creation failed: %v", err)
-	}
+	nodes := make([]*node.KVNode, numNodes)
 
-	// Launch both servers
-	go func() {
-		t.Errorf("node1 failed: %v", node1.Start())
-	}()
-	go func() {
-		t.Errorf("node2 failed: %v", node2.Start())
-	}()
-	go func() {
-		t.Errorf("node3 failed: %v", node3.Start())
-	}()
+	bootstrapServers := make([]string, numNodes)
+	for i := 0; i < numNodes; i++ {
+		bootstrapServers[i] = "localhost:" + strconv.FormatInt(int64(grpcStartPort+i), 10)
+	}
+	for i := 0; i < numNodes; i++ {
+		c := &config.Config{
+			Address:           ":" + strconv.FormatInt(int64(addrStartPort+i), 10),
+			Grpc_address:      "localhost:" + strconv.FormatInt(int64(grpcStartPort+i), 10),
+			LogPath:           "stdout",
+			DataPath:          testFolder + "/storage" + strconv.FormatInt(int64(i), 10),
+			BootstrapServers:  bootstrapServers,
+			ReplicationFactor: replicationFactor,
+		}
+		newNode, err := node.NewKVNode(c)
+		if err != nil {
+			t.Errorf("node%d creation failed: %v", i, err)
+		}
+		go func() {
+			t.Errorf("node%d startup failed: %v", i, newNode.Start())
+		}()
+		nodes[i] = newNode
+	}
 
 	// Wait for servers to come up
 	time.Sleep(1000 * time.Millisecond)
 
 	return func(t *testing.T) {
-		os.RemoveAll("./testing")
-	}, node1, node2, node3
+		os.RemoveAll(testFolder)
+	}, nodes
 }
 
 func TestSimplePartitioner_GetPartitions(t *testing.T) {
-	teardownTest, node1, _, _ := setupTest(t)
+	teardownTest, nodes := setupTest(3, 1, t, "./testing/test1", 6379, 50051)
+	node1 := nodes[0]
 	defer teardownTest(t)
 
 	partitions, err := node1.Partitioner.GetPartitions([]byte("Hello, world"))
@@ -78,6 +57,22 @@ func TestSimplePartitioner_GetPartitions(t *testing.T) {
 	}
 	p := partitions[0]
 	if !(p == node1.ClusterIDs[0] || p == node1.ClusterIDs[1] || p == node1.ClusterIDs[2]) {
-		t.Errorf("Unknown NodeID assiged: %s", p)
+		t.Errorf("Unknown NodeID assigned: %s", p)
 	}
+}
+
+func TestConsistentHashPartitioner_GetPartitions(t *testing.T) {
+	replicationFactor := 3
+	teardownTest, nodes := setupTest(9, replicationFactor, t, "./testing/test2", 6390, 50060)
+	defer teardownTest(t)
+
+	partitions, err := nodes[0].Partitioner.GetPartitions([]byte("testKey"))
+
+	if err != nil {
+		t.Errorf("Test failed: %s", err)
+	}
+	if len(partitions) != replicationFactor {
+		t.Errorf("Received %d nodes in preference list, expected %d", len(partitions), replicationFactor)
+	}
+
 }

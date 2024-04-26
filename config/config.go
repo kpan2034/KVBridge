@@ -26,15 +26,18 @@ type Config struct {
 	DataPath string `koanf:"data_path"`
 	// other nodes in the cluster to connect to
 	BootstrapServers []string `koanf:"bootstrap_servers"`
+	// number of nodes each data point is replicated to
+	ReplicationFactor int `koanf:"replication_factor"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		Address:          ":6379",
-		Grpc_address:     "localhost:50051",
-		LogPath:          "./tmp/log",
-		DataPath:         "./tmp/storage",
-		BootstrapServers: []string{"localhost:50051", "localhost:50052"},
+		Address:           ":6379",
+		Grpc_address:      "localhost:50051",
+		LogPath:           "./tmp/log",
+		DataPath:          "./tmp/storage",
+		BootstrapServers:  []string{"localhost:50051", "localhost:50052"},
+		ReplicationFactor: 1,
 	}
 }
 
@@ -56,6 +59,7 @@ func NewConfigFromEnv() *Config {
 	f.String("log_path", "./tmp/log", "path to logfile")
 	f.String("data_path", "./tmp/storage", "path to persistent storage")
 	f.String("bootstrap_servers", "localhost:50051,localhost:50052", "bootstrap servers in the cluster")
+	f.Int("replication_factor", 3, "number of nodes to replicate each data point")
 	f.Parse(os.Args[1:])
 
 	// Load the config files provided in the commandline.
