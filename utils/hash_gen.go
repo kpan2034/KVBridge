@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 )
 
 type HashGenerator interface {
@@ -17,7 +18,11 @@ func (h *SHA256HashGenerator) GenerateHash(plaintext []byte) string {
 	hash := sha256.New()
 
 	// Write the string data to the hash object
-	hash.Write(plaintext)
+	_, err := hash.Write(plaintext)
+	if err != nil {
+		// TODO: add proper logging
+		fmt.Printf("ERROR: unable to generate hash %s", err)
+	}
 
 	// Get the finalized hash result as a byte slice
 	hashBytes := hash.Sum(nil)

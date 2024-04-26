@@ -148,7 +148,7 @@ func NewKVNode(config *config.Config) (*KVNode, error) {
 	// Initialize partitioner
 	partitioner, err := partitioner.GetNewPartitioner(init_state)
 	if err != nil {
-		logger.Fatalf("could not init partitioner: %v", err)
+		logger.Errorf("could not init partitioner: %v", err)
 		return nil, err
 	}
 
