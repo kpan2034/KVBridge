@@ -1,0 +1,4 @@
+address: ":6381"
+grpc_address: "localhost:50053"
+log_path: "./tmp/log3"
+data_path: "./tmp/storage3"

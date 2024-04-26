@@ -9,6 +9,6 @@ import (
 // For now it opens up a simple backend server that listens for a client.
 func main() {
 	config := config.NewConfigFromEnv()
-	node := node.NewKVNode(config)
+	node, _ := node.NewKVNode(config)
 	node.Start()
 }

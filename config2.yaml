@@ -1,0 +1,4 @@
+address: ":6380"
+grpc_address: "localhost:50052"
+log_path: "./tmp/log2"
+data_path: "./tmp/storage2"

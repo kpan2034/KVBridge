@@ -4,7 +4,7 @@ package types
 type NodeType int
 
 // type of the underlying node
-type NodeID int32
+type NodeID string
 
 // TODO: add go generate
 const (

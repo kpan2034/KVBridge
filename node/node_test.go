@@ -27,8 +27,14 @@ func setupTest(t *testing.T) (teardownTest func(t *testing.T), node1, node2 *nod
 	}
 
 	// Create and launch both KVNodes on separate goroutines
-	node1 = node.NewKVNode(c1)
-	node2 = node.NewKVNode(c2)
+	node1, err := node.NewKVNode(c1)
+	if err != nil {
+		t.Errorf("node1 failed: %v", err)
+	}
+	node2, err = node.NewKVNode(c2)
+	if err != nil {
+		t.Errorf("node2 failed: %v", err)
+	}
 
 	// Launch both servers
 	go func() {

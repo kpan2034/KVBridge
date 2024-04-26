@@ -1,13 +1,9 @@
 package state
 
 import (
+	"KVBridge/config"
 	. "KVBridge/types"
-	"math/rand"
-)
-
-const (
-	minNodeID int32 = 0
-	maxNodeID       = 1000
+	"KVBridge/utils"
 )
 
 type State struct {
@@ -27,18 +23,23 @@ type NodeInfo struct {
 	Address string
 }
 
-// Returns a new State struct with initial values
-func GetInititalState(sz int) *State {
-	id := getNewID()
+// GetInitialState Returns a new State struct with initial values
+func GetInitialState(conf *config.Config) *State {
+	id := getNodeIds([]string{conf.Grpc_address})[0]
 	return &State{
 		NodeType:   NodeSecondary,
 		ID:         id,
-		ClusterIDs: []NodeID{id},
+		ClusterIDs: getNodeIds(conf.BootstrapServers),
 		IDMap:      make(map[NodeID]*NodeInfo),
-		N:          sz,
+		N:          len(conf.BootstrapServers),
 	}
 }
 
-func getNewID() NodeID {
-	return NodeID(rand.Int31n(maxNodeID-minNodeID+1) - minNodeID)
+func getNodeIds(serverAddresses []string) []NodeID {
+	hashGenerator := utils.SHA256HashGenerator{}
+	output := make([]NodeID, len(serverAddresses))
+	for i, addr := range serverAddresses {
+		output[i] = NodeID(hashGenerator.GenerateHash([]byte(addr)))
+	}
+	return output
 }

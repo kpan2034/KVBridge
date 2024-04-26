@@ -1,30 +1,36 @@
 package partitioner
 
 import (
+	"KVBridge/state"
 	. "KVBridge/types"
-	"bytes"
-	"encoding/binary"
-	// "reflect"
+	"KVBridge/utils"
+	"strconv"
 )
 
 // Partitioner interface
-// Given a node and the cluster size, returns which node(s) the key belongs to
 type Partitioner interface {
+	// GetPartitions returns which node(s) the key belongs to given a key
 	GetPartitions(key []byte) ([]NodeID, error)
 }
 
-type SimplePartitioner struct {
-	node NodeID
-	size int32
+func GetNewPartitioner(s *state.State) (Partitioner, error) {
+	partitioner := SimplePartitioner{s}
+	return &partitioner, nil
 }
 
+type SimplePartitioner struct {
+	nodeState *state.State
+}
+
+// Simple partitioner, works only if no nodes enter/exit the system
 func (p *SimplePartitioner) GetPartitions(key []byte) ([]NodeID, error) {
-	var k NodeID
-	// nodeIDSize := reflect.TypeOf(NodeID(0)).Size()
-	err := binary.Read(bytes.NewReader(key), binary.BigEndian, &k)
+	hashGenerator := utils.SHA256HashGenerator{}
+	var keyHash = hashGenerator.GenerateHash(key)
+	var cluster_size int = p.nodeState.N
+	// Use last few bits of hash (to avoid integer overflows) mod cluster_size to decide which server to use
+	decodedInt, err := strconv.ParseInt(keyHash[len(keyHash)-10:len(keyHash)], 16, 64)
 	if err != nil {
 		return nil, err
 	}
-
-	return []NodeID{k % NodeID(p.size)}, nil
+	return []NodeID{p.nodeState.ClusterIDs[decodedInt%int64(cluster_size)]}, nil
 }
