@@ -27,28 +27,45 @@ type NodeInfo struct {
 
 // GetInitialState Returns a new State struct with initial values
 func GetInitialState(conf *config.Config) *State {
-	id := getNodeIds([]string{conf.Grpc_address})[0]
+	id, _ := getNodeIds([]string{conf.Grpc_address}) // length of this array will always be 1
+	ids, idMap := getNodeIds(conf.BootstrapServers)
+
 	return &State{
 		NodeType:          NodeSecondary,
-		ID:                id,
-		ClusterIDs:        getNodeIds(conf.BootstrapServers),
-		IDMap:             make(map[NodeID]*NodeInfo),
+		ID:                id[0],
+		ClusterIDs:        ids,
+		IDMap:             idMap,
 		N:                 len(conf.BootstrapServers),
 		ReplicationFactor: conf.ReplicationFactor,
 	}
 }
 
-func getNodeIds(serverAddresses []string) []NodeID {
+func getNodeIds(serverAddresses []string) ([]NodeID, map[NodeID]*NodeInfo) {
 	hashGenerator := utils.SHA256HashGenerator{}
 	output := make([]string, len(serverAddresses))
+	idMap := make(map[NodeID]*NodeInfo)
 	for i, addr := range serverAddresses {
-		output[i] = hashGenerator.GenerateHash([]byte(addr))
+		hash := hashGenerator.GenerateHash([]byte(addr))
+		output[i] = hash
+
+		id := NodeID(hash)
+		// Add server address to map of node info
+		idMap[id] = &NodeInfo{
+			Address: addr,
+		}
 	}
+
 	// Sort the node ids, makes partitioner lookups simpler
 	sort.Strings(output)
 	outputNodeIds := make([]NodeID, len(serverAddresses))
 	for i, hash := range output {
 		outputNodeIds[i] = NodeID(hash)
 	}
-	return outputNodeIds
+	return outputNodeIds, idMap
+}
+
+// helper function to easily access node info
+func (s *State) GetNodeInfo(id NodeID) *NodeInfo {
+	info := s.IDMap[id]
+	return info
 }

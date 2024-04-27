@@ -2,11 +2,17 @@ package messager
 
 import (
 	"KVBridge/proto/compiled/ping"
+	. "KVBridge/types"
 	"context"
 	"fmt"
 	"io"
 	"time"
 )
+
+func (m *Messager) PingRequest(ctx context.Context, id NodeID, in *ping.PingRequest) (*ping.PingResponse, error) {
+	cl := m.getClient(id)
+	return cl.PingRequest(ctx, in)
+}
 
 // Initiates PingRequest
 func (cl *Client) PingRequest(ctx context.Context, in *ping.PingRequest) (*ping.PingResponse, error) {
