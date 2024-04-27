@@ -1,4 +1,4 @@
-package messager_test
+package node_test
 
 import (
 	"KVBridge/config"

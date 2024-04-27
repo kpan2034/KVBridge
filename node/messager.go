@@ -1,9 +1,10 @@
-package messager
+package node
 
 import (
 	"KVBridge/environment"
 	"KVBridge/log"
 	"KVBridge/proto/compiled/ping"
+	"KVBridge/proto/compiled/replication"
 	"KVBridge/proto/compiled/startup"
 	. "KVBridge/types"
 	"context"
@@ -22,8 +23,11 @@ type Messager struct {
 	*environment.Environment
 	pingServer
 	startupServer
+	replicationServer
 	client_map map[NodeID]*Client
 	clients    []Client
+	node       *KVNode // backpointer to kv node, to be used internally by the messager struct only
+	// need to find a better way to doing this. really messed up the design of this.
 }
 
 type pingServer struct {
@@ -36,6 +40,11 @@ type startupServer struct {
 	startup.UnimplementedStartupServiceServer
 }
 
+type replicationServer struct {
+	*environment.Environment
+	replication.UnimplementedReplicationServiceServer
+}
+
 // The messager has a client that is associated with each node
 // On startup, it talks to other nodes and maps them to a node id
 type Client struct {
@@ -43,9 +52,11 @@ type Client struct {
 	*grpc.ClientConn
 	ping.PingServiceClient
 	startup.StartupServiceClient
+	replication.ReplicationServiceClient
 }
 
-func NewMessager(env *environment.Environment) *Messager {
+func NewMessager(node *KVNode) *Messager {
+	env := node.Environment
 	l := env.Named("messager")
 	env = env.WithLogger(l)
 	clients := make([]Client, 0, len(env.ClusterIDs))
@@ -76,9 +87,13 @@ func NewMessager(env *environment.Environment) *Messager {
 	}
 
 	m := &Messager{
-		Environment: env,
-		clients:     clients,
-		client_map:  client_map,
+		Environment:       env,
+		pingServer:        pingServer{},
+		startupServer:     startupServer{},
+		replicationServer: replicationServer{},
+		client_map:        client_map,
+		clients:           clients,
+		node:              node,
 	}
 
 	l.Debugf("creating new messager: %+v", m)
@@ -91,6 +106,7 @@ func newClient(env *environment.Environment, conn *grpc.ClientConn) Client {
 		conn,
 		ping.NewPingServiceClient(conn),
 		startup.NewStartupServiceClient(conn),
+		replication.NewReplicationServiceClient(conn),
 	}
 }
 
@@ -108,17 +124,27 @@ func (m *Messager) Start() error {
 
 	var wg sync.WaitGroup
 
+	numServers := 0
+
+	numServers++
 	pinger := &pingServer{
 		Environment: m.Environment.WithLogger(m.Logger.Named("ping_service")),
 	}
+	ping.RegisterPingServiceServer(s, pinger)
 
+	numServers++
 	starter := &startupServer{
 		Environment: m.Environment.WithLogger(m.Logger.Named("startup_service")),
 	}
-	ping.RegisterPingServiceServer(s, pinger)
 	startup.RegisterStartupServiceServer(s, starter)
 
-	wg.Add(2)
+	numServers++
+	// replicator := &replicationServer{
+	// 	Environment: m.Environment.WithLogger(m.Logger.Named("replication_service")),
+	// }
+	replication.RegisterReplicationServiceServer(s, m)
+
+	wg.Add(numServers)
 	go func() {
 		defer wg.Done()
 		pinger.Logger.Debugf("ping server listening at %v", lis.Addr())
@@ -135,6 +161,15 @@ func (m *Messager) Start() error {
 			starter.Logger.Errorf("startup server error: %v", err)
 		}
 		starter.Logger.Debugf("startup server returning with no error\n")
+	}()
+
+	go func() {
+		defer wg.Done()
+		m.Logger.Debugf("replication server listening at %v", lis.Addr())
+		if err := s.Serve(lis); err != nil {
+			m.Logger.Errorf("replication server error: %v", err)
+		}
+		m.Logger.Debugf("replication server returning with no error\n")
 	}()
 
 	wg.Wait()

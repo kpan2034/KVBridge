@@ -4,7 +4,6 @@ import (
 	"KVBridge/config"
 	"KVBridge/environment"
 	"KVBridge/log"
-	"KVBridge/messager"
 	"KVBridge/partitioner"
 	"KVBridge/state"
 	"KVBridge/storage"
@@ -23,7 +22,7 @@ type KVNode struct {
 	// storage engine
 	storage storage.StorageEngine
 	// messager handle inter-node communication
-	*messager.Messager
+	*Messager
 	Partitioner partitioner.Partitioner
 }
 
@@ -70,7 +69,12 @@ func (node *KVNode) Start() error {
 				}
 
 				// Ping other node (testing gossip)
-				_ = node.Messager.PingEverybody(context.Background())
+				nacks, err := node.ReplicateWrites(key, value)
+				if err != nil {
+					// just error out for now, later should just log
+					conn.WriteError(fmt.Sprintf("ERR could not replicate (%s = %s)", string(key), string(value)))
+				}
+				node.Logger.Debugf("replicated to %d other nodes", nacks)
 				conn.WriteString("OK")
 			case "get":
 				if len(cmd.Args) != 2 {
@@ -125,6 +129,8 @@ func (node *KVNode) Start() error {
 
 // Returns a KVNode with the specified configuration
 func NewKVNode(config *config.Config) (*KVNode, error) {
+
+	node := &KVNode{}
 	// Initialize logger
 	logPath := config.LogPath
 	logger := log.NewZapLogger(logPath, log.DebugLogLevel).Named(fmt.Sprintf("node@%v", config.Address))
@@ -132,6 +138,7 @@ func NewKVNode(config *config.Config) (*KVNode, error) {
 
 	// Wrap all dependencies in an env
 	env := environment.New(logger, config, init_state)
+	node.Environment = env
 
 	logger.Debugf("creating kvnode with config: %v", config)
 
@@ -141,9 +148,12 @@ func NewKVNode(config *config.Config) (*KVNode, error) {
 		logger.Fatalf("could not init storage engine: %v", err)
 		return nil, err
 	}
+	node.storage = storage
 
 	// Initialize messager
-	messager := messager.NewMessager(env)
+	// yeah this is dumb okay
+	messager := NewMessager(node)
+	node.Messager = messager
 
 	// Initialize partitioner
 	partitioner, err := partitioner.GetNewPartitioner(init_state)
@@ -151,14 +161,7 @@ func NewKVNode(config *config.Config) (*KVNode, error) {
 		logger.Errorf("could not init partitioner: %v", err)
 		return nil, err
 	}
-
-	// Return the node
-	node := &KVNode{
-		Environment: env,
-		storage:     storage,
-		Messager:    messager,
-		Partitioner: partitioner,
-	}
+	node.Partitioner = partitioner
 
 	return node, nil
 }

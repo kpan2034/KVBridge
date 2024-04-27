@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package kvbridge;
+
+option go_package = "./replication";
+
+service ReplicationService {
+  // replicate a single op, ideally it should be a single
+  // function that takes in the op + args the client recieved but for now
+  // just a simple replicate write function that always replicate
+  rpc ReplicateWrite(ReplicateWriteRequest) returns (ReplicateWriteResponse);
+}
+
+message ReplicateWriteRequest {
+  // bool deferred = 1; // can the write be deferred? used when ack is not
+  // needed AFTER write is made durable
+  bytes key = 1;
+  bytes value = 2;
+}
+
+message ReplicateWriteResponse { bool ok = 1; }

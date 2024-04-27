@@ -1,4 +1,4 @@
-package messager
+package node
 
 import (
 	"KVBridge/proto/compiled/startup"
