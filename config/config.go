@@ -36,8 +36,8 @@ func DefaultConfig() *Config {
 		Grpc_address:      "localhost:50051",
 		LogPath:           "./tmp/log",
 		DataPath:          "./tmp/storage",
-		BootstrapServers:  []string{"localhost:50051", "localhost:50052"},
-		ReplicationFactor: 1,
+		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
+		ReplicationFactor: 3,
 	}
 }
 

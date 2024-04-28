@@ -4,60 +4,89 @@ import (
 	"KVBridge/config"
 	"KVBridge/node"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 )
 
-func setupTest(numNodes int, replicationFactor int, t *testing.T, testFolder string, addrStartPort int, grpcStartPort int) (func(t *testing.T), []*node.KVNode) {
-	os.RemoveAll(testFolder)
+func setupTest(t *testing.T) (teardownTest func(t *testing.T), node1, node2, node3 *node.KVNode) {
+	os.RemoveAll("./testing")
 
-	nodes := make([]*node.KVNode, numNodes)
-
-	bootstrapServers := make([]string, numNodes)
-	for i := 0; i < numNodes; i++ {
-		bootstrapServers[i] = "localhost:" + strconv.FormatInt(int64(grpcStartPort+i), 10)
+	// Define configs for both nodes
+	c1 := &config.Config{
+		Address:           ":6379",
+		Grpc_address:      "localhost:50051",
+		LogPath:           "stdout",
+		DataPath:          "./testing/storage",
+		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
+		ReplicationFactor: 2,
+	}
+	c2 := &config.Config{
+		Address:           ":6380",
+		Grpc_address:      "localhost:50052",
+		LogPath:           "stdout",
+		DataPath:          "./testing/storage2",
+		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
+		ReplicationFactor: 2,
+	}
+	c3 := &config.Config{
+		Address:           ":6381",
+		Grpc_address:      "localhost:50053",
+		LogPath:           "stdout",
+		DataPath:          "./testing/storage3",
+		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
+		ReplicationFactor: 2,
 	}
 
-	cancelFuncs := make([]func(), numNodes)
+	// Create and launch both KVNodes on separate goroutines
+	var err error
+	node1, cancelFunc1, err := node.NewKVNode(c1)
+	if err != nil {
+		t.Errorf("node1 creation failed: %v", err)
+	}
+	node2, cancelFunc2, err := node.NewKVNode(c2)
+	if err != nil {
+		t.Errorf("node2 creation failed: %v", err)
+	}
+	node3, cancelFunc3, err := node.NewKVNode(c3)
+	if err != nil {
+		t.Errorf("node3 creation failed: %v", err)
+	}
 
-	for i := 0; i < numNodes; i++ {
-		c := &config.Config{
-			Address:           ":" + strconv.FormatInt(int64(addrStartPort+i), 10),
-			Grpc_address:      "localhost:" + strconv.FormatInt(int64(grpcStartPort+i), 10),
-			LogPath:           "stdout",
-			DataPath:          testFolder + "/storage" + strconv.FormatInt(int64(i), 10),
-			BootstrapServers:  bootstrapServers,
-			ReplicationFactor: replicationFactor,
-		}
-		newNode, cancelFunc, err := node.NewKVNode(c)
+	// Launch both servers
+	go func() {
+		err := node1.Start()
 		if err != nil {
-			t.Errorf("node%d creation failed: %v", i, err)
+			t.Errorf("node1 failed: %v", err)
 		}
-		go func() {
-			err := newNode.Start()
-			if err != nil {
-				t.Errorf("node%d startup failed: %v", i, err)
-			}
-		}()
-		nodes[i] = newNode
-		cancelFuncs[i] = cancelFunc
-	}
+	}()
+
+	go func() {
+		err := node2.Start()
+		if err != nil {
+			t.Errorf("node2 failed: %v", err)
+		}
+	}()
+
+	go func() {
+		err := node3.Start()
+		if err != nil {
+			t.Errorf("node3 failed: %v", err)
+		}
+	}()
 
 	// Wait for servers to come up
 	time.Sleep(1000 * time.Millisecond)
 
 	return func(t *testing.T) {
-		os.RemoveAll(testFolder)
-		for _, f := range cancelFuncs {
-			f()
-		}
-	}, nodes
+		os.RemoveAll("./testing")
+		cancelFunc1()
+		cancelFunc2()
+		cancelFunc3()
+	}, node1, node2, node3
 }
 
 func TestSimplePartitioner_GetPartitions(t *testing.T) {
-	teardownTest, nodes := setupTest(3, 1, t, "./testing/test1", 6379, 50051)
-	node1 := nodes[0]
+	teardownTest, node1, _, _ := setupTest(t)
 	defer teardownTest(t)
 
 	partitions, err := node1.Partitioner.GetPartitions([]byte("Hello, world"))
@@ -72,11 +101,11 @@ func TestSimplePartitioner_GetPartitions(t *testing.T) {
 }
 
 func TestConsistentHashPartitioner_GetPartitions(t *testing.T) {
-	replicationFactor := 3
-	teardownTest, nodes := setupTest(9, replicationFactor, t, "./testing/test2", 6390, 50060)
+	teardownTest, node1, _, _ := setupTest(t)
 	defer teardownTest(t)
 
-	partitions, err := nodes[0].Partitioner.GetPartitions([]byte("testKey"))
+	partitions, err := node1.Partitioner.GetPartitions([]byte("testKey"))
+	replicationFactor := 2
 
 	if err != nil {
 		t.Errorf("Test failed: %s", err)

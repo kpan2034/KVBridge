@@ -80,6 +80,7 @@ func NewKVNode(config *config.Config) (*KVNode, func(), error) {
 		}
 
 		err = srv.Close()
+		node.Logger.Debugf("closing client handling server: %s", srv.Addr())
 		if err != nil {
 			node.Logger.Errorf("error closing client server: %v", err)
 		}
