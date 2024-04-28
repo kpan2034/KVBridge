@@ -11,7 +11,8 @@ import (
 // For now it opens up a simple backend server that listens for a client.
 func main() {
 	config := config.NewConfigFromEnv()
-	kvNode, err := node.NewKVNode(config)
+	kvNode, closeFunc, err := node.NewKVNode(config)
+	defer closeFunc()
 	if err != nil {
 		fmt.Printf("Failed to create KV node: %s", err)
 		os.Exit(1)

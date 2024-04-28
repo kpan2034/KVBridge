@@ -1,12 +1,47 @@
-package messager
+package node
 
 import (
 	"KVBridge/proto/compiled/ping"
+	. "KVBridge/types"
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 )
+
+func (m *Messager) PingEverybody(ctx context.Context) interface{} {
+	// TODO: make this a buffered channel
+
+	wg := sync.WaitGroup{}
+
+	// Make async Ping requests
+	for _, client := range m.clients {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+			defer cancel()
+			resp, err := client.PingRequest(ctx, &ping.PingRequest{
+				Msg: fmt.Sprintf("hello from: %v", m.Address),
+			})
+			if err != nil {
+				m.Logger.Debugf("ping error: %v", err)
+				return
+			}
+			// Ideally you send the resp over a channel so that some receiver function can handle them
+			// as they come in, one at a time
+			m.Logger.Debugf("recv value: %+v", resp)
+		}()
+	}
+	wg.Wait()
+	return nil
+}
+
+func (m *Messager) PingRequest(ctx context.Context, id NodeID, in *ping.PingRequest) (*ping.PingResponse, error) {
+	cl := m.getClient(id)
+	return cl.PingRequest(ctx, in)
+}
 
 // Initiates PingRequest
 func (cl *Client) PingRequest(ctx context.Context, in *ping.PingRequest) (*ping.PingResponse, error) {
