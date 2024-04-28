@@ -26,6 +26,7 @@ type ReplicationServiceClient interface {
 	// function that takes in the op + args the client recieved but for now
 	// just a simple replicate write function that always replicate
 	ReplicateWrite(ctx context.Context, in *ReplicateWriteRequest, opts ...grpc.CallOption) (*ReplicateWriteResponse, error)
+	GetKey(ctx context.Context, in *GetKeyRequest, opts ...grpc.CallOption) (*GetKeyResponse, error)
 }
 
 type replicationServiceClient struct {
@@ -45,6 +46,15 @@ func (c *replicationServiceClient) ReplicateWrite(ctx context.Context, in *Repli
 	return out, nil
 }
 
+func (c *replicationServiceClient) GetKey(ctx context.Context, in *GetKeyRequest, opts ...grpc.CallOption) (*GetKeyResponse, error) {
+	out := new(GetKeyResponse)
+	err := c.cc.Invoke(ctx, "/kvbridge.ReplicationService/GetKey", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReplicationServiceServer is the server API for ReplicationService service.
 // All implementations must embed UnimplementedReplicationServiceServer
 // for forward compatibility
@@ -53,6 +63,7 @@ type ReplicationServiceServer interface {
 	// function that takes in the op + args the client recieved but for now
 	// just a simple replicate write function that always replicate
 	ReplicateWrite(context.Context, *ReplicateWriteRequest) (*ReplicateWriteResponse, error)
+	GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error)
 	mustEmbedUnimplementedReplicationServiceServer()
 }
 
@@ -62,6 +73,9 @@ type UnimplementedReplicationServiceServer struct {
 
 func (UnimplementedReplicationServiceServer) ReplicateWrite(context.Context, *ReplicateWriteRequest) (*ReplicateWriteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplicateWrite not implemented")
+}
+func (UnimplementedReplicationServiceServer) GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetKey not implemented")
 }
 func (UnimplementedReplicationServiceServer) mustEmbedUnimplementedReplicationServiceServer() {}
 
@@ -94,6 +108,24 @@ func _ReplicationService_ReplicateWrite_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReplicationService_GetKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplicationServiceServer).GetKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/kvbridge.ReplicationService/GetKey",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplicationServiceServer).GetKey(ctx, req.(*GetKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReplicationService_ServiceDesc is the grpc.ServiceDesc for ReplicationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -104,6 +136,10 @@ var ReplicationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReplicateWrite",
 			Handler:    _ReplicationService_ReplicateWrite_Handler,
+		},
+		{
+			MethodName: "GetKey",
+			Handler:    _ReplicationService_GetKey_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

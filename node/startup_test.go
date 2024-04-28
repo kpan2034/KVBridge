@@ -40,28 +40,39 @@ func setupTest(t *testing.T) (teardownTest func(t *testing.T), node1, node2, nod
 
 	// Create and launch both KVNodes on separate goroutines
 	var err error
-	node1, err = node.NewKVNode(c1)
+	node1, cancelFunc1, err := node.NewKVNode(c1)
 	if err != nil {
 		t.Errorf("node1 creation failed: %v", err)
 	}
-	node2, err = node.NewKVNode(c2)
+	node2, cancelFunc2, err := node.NewKVNode(c2)
 	if err != nil {
 		t.Errorf("node2 creation failed: %v", err)
 	}
-	node3, err = node.NewKVNode(c3)
+	node3, cancelFunc3, err := node.NewKVNode(c3)
 	if err != nil {
 		t.Errorf("node3 creation failed: %v", err)
 	}
 
 	// Launch both servers
 	go func() {
-		t.Errorf("node1 failed: %v", node1.Start())
+		err := node1.Start()
+		if err != nil {
+			t.Errorf("node1 failed: %v", err)
+		}
 	}()
+
 	go func() {
-		t.Errorf("node2 failed: %v", node2.Start())
+		err := node2.Start()
+		if err != nil {
+			t.Errorf("node2 failed: %v", err)
+		}
 	}()
+
 	go func() {
-		t.Errorf("node3 failed: %v", node3.Start())
+		err := node3.Start()
+		if err != nil {
+			t.Errorf("node3 failed: %v", err)
+		}
 	}()
 
 	// Wait for servers to come up
@@ -69,6 +80,9 @@ func setupTest(t *testing.T) (teardownTest func(t *testing.T), node1, node2, nod
 
 	return func(t *testing.T) {
 		os.RemoveAll("./testing")
+		cancelFunc1()
+		cancelFunc2()
+		cancelFunc3()
 	}, node1, node2, node3
 }
 

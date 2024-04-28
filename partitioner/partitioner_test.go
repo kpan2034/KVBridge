@@ -18,6 +18,9 @@ func setupTest(numNodes int, replicationFactor int, t *testing.T, testFolder str
 	for i := 0; i < numNodes; i++ {
 		bootstrapServers[i] = "localhost:" + strconv.FormatInt(int64(grpcStartPort+i), 10)
 	}
+
+	cancelFuncs := make([]func(), numNodes)
+
 	for i := 0; i < numNodes; i++ {
 		c := &config.Config{
 			Address:           ":" + strconv.FormatInt(int64(addrStartPort+i), 10),
@@ -27,14 +30,18 @@ func setupTest(numNodes int, replicationFactor int, t *testing.T, testFolder str
 			BootstrapServers:  bootstrapServers,
 			ReplicationFactor: replicationFactor,
 		}
-		newNode, err := node.NewKVNode(c)
+		newNode, cancelFunc, err := node.NewKVNode(c)
 		if err != nil {
 			t.Errorf("node%d creation failed: %v", i, err)
 		}
 		go func() {
-			t.Errorf("node%d startup failed: %v", i, newNode.Start())
+			err := newNode.Start()
+			if err != nil {
+				t.Errorf("node%d startup failed: %v", i, err)
+			}
 		}()
 		nodes[i] = newNode
+		cancelFuncs[i] = cancelFunc
 	}
 
 	// Wait for servers to come up
@@ -42,6 +49,9 @@ func setupTest(numNodes int, replicationFactor int, t *testing.T, testFolder str
 
 	return func(t *testing.T) {
 		os.RemoveAll(testFolder)
+		for _, f := range cancelFuncs {
+			f()
+		}
 	}, nodes
 }
 

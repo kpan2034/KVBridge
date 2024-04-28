@@ -6,6 +6,8 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
+var ErrNotFound = pebble.ErrNotFound
+
 // Storage Engine Interface to support
 type StorageEngine interface {
 	Set(key []byte, value []byte) error

@@ -15,3 +15,6 @@ protoc:
 	rm -rf $(REL_PROTO_PATH)
 	mkdir -p $(REL_PROTO_PATH)
 	protoc --go_out=$(REL_PROTO_PATH) --go-grpc_out=$(REL_PROTO_PATH) $(PROTOFILES)
+
+test:
+	go test ./...

@@ -8,10 +8,8 @@ import (
 	"KVBridge/proto/compiled/startup"
 	. "KVBridge/types"
 	"context"
-	"fmt"
 	"net"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -27,6 +25,7 @@ type Messager struct {
 	client_map map[NodeID]*Client
 	clients    []Client
 	node       *KVNode // backpointer to kv node, to be used internally by the messager struct only
+	server     *grpc.Server
 	// need to find a better way to doing this. really messed up the design of this.
 }
 
@@ -94,6 +93,7 @@ func NewMessager(node *KVNode) *Messager {
 		client_map:        client_map,
 		clients:           clients,
 		node:              node,
+		server:            nil,
 	}
 
 	l.Debugf("creating new messager: %+v", m)
@@ -121,6 +121,7 @@ func (m *Messager) Start() error {
 			logging.UnaryServerInterceptor(InterceptorLogger(m.Logger)),
 		),
 	)
+	m.server = s
 
 	var wg sync.WaitGroup
 
@@ -177,34 +178,6 @@ func (m *Messager) Start() error {
 	return nil
 }
 
-func (m *Messager) PingEverybody(ctx context.Context) interface{} {
-	// TODO: make this a buffered channel
-
-	wg := sync.WaitGroup{}
-
-	// Make async Ping requests
-	for _, client := range m.clients {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			defer cancel()
-			resp, err := client.PingRequest(ctx, &ping.PingRequest{
-				Msg: fmt.Sprintf("hello from: %v", m.Address),
-			})
-			if err != nil {
-				m.Logger.Debugf("ping error: %v", err)
-				return
-			}
-			// Ideally you send the resp over a channel so that some receiver function can handle them
-			// as they come in, one at a time
-			m.Logger.Debugf("recv value: %+v", resp)
-		}()
-	}
-	wg.Wait()
-	return nil
-}
-
 func InterceptorLogger(l log.Logger) logging.Logger {
 	return logging.LoggerFunc(func(_ context.Context, lvl logging.Level, msg string, fields ...any) {
 		logMsg := append([]any{"msg", msg}, fields)
@@ -215,4 +188,8 @@ func InterceptorLogger(l log.Logger) logging.Logger {
 func (m *Messager) getClient(id NodeID) *Client {
 	client := m.client_map[id]
 	return client
+}
+
+func (m *Messager) Close() {
+	m.server.GracefulStop()
 }

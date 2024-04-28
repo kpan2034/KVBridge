@@ -9,6 +9,7 @@ service ReplicationService {
   // function that takes in the op + args the client recieved but for now
   // just a simple replicate write function that always replicate
   rpc ReplicateWrite(ReplicateWriteRequest) returns (ReplicateWriteResponse);
+  rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
 }
 
 message ReplicateWriteRequest {
@@ -19,3 +20,10 @@ message ReplicateWriteRequest {
 }
 
 message ReplicateWriteResponse { bool ok = 1; }
+
+message GetKeyRequest { bytes key = 1; }
+
+message GetKeyResponse {
+  bool ok = 1;
+  bytes value = 2;
+}
