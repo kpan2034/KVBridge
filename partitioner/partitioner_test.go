@@ -96,7 +96,7 @@ func TestSimplePartitioner_GetPartitions(t *testing.T) {
 	}
 	p := partitions[0]
 	if !(p == node1.ClusterIDs[0] || p == node1.ClusterIDs[1] || p == node1.ClusterIDs[2]) {
-		t.Errorf("Unknown NodeID assigned: %s", p)
+		t.Errorf("Unknown NodeID assigned: %v", p)
 	}
 }
 

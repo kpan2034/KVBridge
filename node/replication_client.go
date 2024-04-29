@@ -72,10 +72,17 @@ func (m *Messager) ReconcileKeyValue(key *KeyType, myValue *ValueType) (votedVal
 		}
 		ok := resp.GetOk()
 		value := resp.GetValue()
-		m.Logger.Debugf("node %s (ok:%v) returned (key: %v, value: %v)", id, ok, key, value)
+
+		// decode value to value type
+		vt, err := DecodeToValueType(value)
+		if err != nil {
+			return nil, err
+		}
+		m.Logger.Debugf("node %s (ok:%v) returned (key: %v, value: %v)", id, ok, key, vt)
 
 		// Add returned value to the vote map
-		voteMap[string(value)]++
+		// We ignore versions when voting
+		voteMap[string(vt.Value())]++
 	}
 
 	// Extract majority value from the map and return
