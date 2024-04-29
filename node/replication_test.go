@@ -71,16 +71,16 @@ func TestMessager_ReconcileKey(t *testing.T) {
 			// Write invalid key value pair to local storage
 			err := node1.Storage.Set(key, staleValue)
 			if err != nil {
-				t.Errorf("error writing to node %s: (key: %v, value: %v)", node1.ID, key, staleValue)
+				t.Errorf("error writing to node %v: (key: %v, value: %v)", node1.ID, key, staleValue)
 			}
 			// Write correct key value pairs to local storage of other nodes
 			err = node2.Storage.Set(key, value)
 			if err != nil {
-				t.Errorf("error writing to node %s: (key: %v, value: %v)", node2.ID, key, value)
+				t.Errorf("error writing to node %v: (key: %v, value: %v)", node2.ID, key, value)
 			}
 			err = node3.Storage.Set(key, value)
 			if err != nil {
-				t.Errorf("error writing to node %s: (key: %v, value: %v)", node3.ID, key, value)
+				t.Errorf("error writing to node %v: (key: %v, value: %v)", node3.ID, key, value)
 			}
 			// reconcile value from other nodes
 			majValue, err := node1.ReconcileKeyValue(key, staleValue)

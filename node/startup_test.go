@@ -107,7 +107,7 @@ func TestMessager_StartupService(t *testing.T) {
 		}
 
 		if NodeID(resp.GetId()) != id {
-			t.Errorf("want: %s, got: %s", id, resp.GetId())
+			t.Errorf("want: %v, got: %v", id, resp.GetId())
 		}
 	}
 }

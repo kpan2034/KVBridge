@@ -9,4 +9,4 @@ service StartupService {
 }
 
 message GetNodeInfoRequest {}
-message GetNodeInfoResponse { string id = 1; }
+message GetNodeInfoResponse { uint32 id = 1; }
