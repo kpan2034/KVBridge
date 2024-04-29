@@ -7,9 +7,11 @@ import (
 	"KVBridge/partitioner"
 	"KVBridge/state"
 	"KVBridge/storage"
+	"KVBridge/types"
+	"errors"
 	"fmt"
-
 	"github.com/tidwall/redcon"
+	"os"
 )
 
 // The main struct that represents a node in a KVBridge cluster
@@ -25,6 +27,72 @@ type KVNode struct {
 
 	// other important stuff
 	client_server *redcon.Server
+}
+
+func (kvNode *KVNode) getRecoverNode(keyrangeLB types.NodeID, keyrangeUB types.NodeID) (types.NodeID, error) {
+	// TODO: hacky, need to connect to node to check status and if given range is served
+	idx := 0
+	for keyrangeUB != kvNode.Environment.State.ClusterIDs[idx] {
+		idx += 1
+	}
+	for i := 0; i < kvNode.Environment.State.ReplicationFactor; i++ {
+		candidateNodeIdx := (i + idx) % kvNode.Environment.State.N
+		candidateNodeID := kvNode.Environment.State.ClusterIDs[candidateNodeIdx]
+		if kvNode.Environment.State.IDMap[candidateNodeID].Status == types.StatusUP {
+			return candidateNodeID, nil
+		}
+	}
+	return 0, errors.New("No live node found")
+}
+
+// Recover Synchronizes divergent replicas (could be due to failures)
+// Utilizes Anti-entropy (Merkle trees) for efficiency
+//func (kvNode *KVNode) Recover() error {
+//
+//	if kvNode.Environment.State.ReplicationFactor <= 1 {
+//		kvNode.Environment.Logger.Errorf("Replication Factor is %d, can not recover", kvNode.Environment.State.ReplicationFactor)
+//		return errors.New("Replication Factor <=1, can not recover")
+//	}
+//
+//	// Ranges of data handled by current node
+//	keyRanges := kvNode.Environment.State.KeyRanges
+//
+//	for _, keyrange := range keyRanges {
+//
+//		// Step-1: Identify which node (S) to copy over data from to current node (D)
+//		sourceNode, err := kvNode.getRecoverNode(keyrange.StartHash, keyrange.EndHash)
+//		if err != nil {
+//			return err
+//		}
+//
+//		// Step-2: Take a snapshot of data
+//		snapshotIter, err := kvNode.Storage.GetSnapshotIter(keyrange.StartHash, keyrange.EndHash)
+//		if err != nil {
+//			return err
+//		}
+//
+//		// Step-3: Create merkle tree on S and D for each key range
+//		destMerkleTree, err := BuildMerkleTree(keyrange, snapshotIter)
+//		if err != nil { return err }
+//		//TODO : RPC call for sourceMerkleTree
+//
+//		// Step-4: Streaming communication bw S and D to find keys with discrepancy
+//
+//		// Step-5: Fetch data from S for the problematic keys
+//
+//		// Step-6: Update D with received data
+//
+//	}
+//
+//	return nil
+//}
+
+// Kill a node, useful for testing purposes
+func (kvNode *KVNode) Kill() error {
+	//err := kvNode.storage.Close()
+	//if err != nil { return err }
+	os.Exit(0)
+	return nil
 }
 
 // Returns a KVNode with the specified configuration

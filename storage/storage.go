@@ -2,7 +2,7 @@ package storage
 
 import (
 	. "KVBridge/environment"
-
+	"KVBridge/types"
 	"github.com/cockroachdb/pebble"
 )
 
@@ -13,6 +13,8 @@ type StorageEngine interface {
 	Set(key []byte, value []byte) error
 	Get(key []byte) ([]byte, error)
 	Close() error
+	Snapshot(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([][]byte, [][]byte, error)
+	GetSnapshotIter(keyLowerBound types.NodeID, keyUpperBound types.NodeID) (StorageIterator, error) // TODO: Decouple from pebble iterator
 }
 
 type PebbleStorageManager struct {
@@ -72,6 +74,56 @@ func (pb *PebbleStorageManager) Get(key []byte) ([]byte, error) {
 	defer closer.Close()
 	pb.Debugf("get response: key: %v, value: %v", string(key), string(value))
 	return value, nil
+}
+
+func (pb *PebbleStorageManager) Snapshot(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([][]byte, [][]byte, error) {
+	snapshotDB := pb.db.NewSnapshot()
+
+	iterOptions := pebble.IterOptions{
+		LowerBound: types.ToBytes(keyLowerBound),
+		UpperBound: types.ToBytes(keyUpperBound),
+	}
+	iter, err := snapshotDB.NewIter(&iterOptions)
+
+	if err != nil {
+		return nil, nil, err
+	}
+	var keys [][]byte
+	var vals [][]byte
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		val, err := iter.ValueAndErr()
+		if err != nil {
+			return nil, nil, err
+		}
+		keys = append(keys, key)
+		vals = append(vals, val)
+	}
+	if err := iter.Close(); err != nil {
+		return nil, nil, err
+	}
+	if err := snapshotDB.Close(); err != nil {
+		return nil, nil, err
+	}
+
+	return keys, vals, nil
+}
+
+type StorageIterator interface {
+	Valid() bool
+	Key() []byte
+	Next() bool
+	First() bool
+}
+
+func (pb *PebbleStorageManager) GetSnapshotIter(keyLowerBound types.NodeID, keyUpperBound types.NodeID) (StorageIterator, error) {
+	snapshotDB := pb.db.NewSnapshot()
+	iterOptions := pebble.IterOptions{
+		LowerBound: types.ToBytes(keyLowerBound),
+		UpperBound: types.ToBytes(keyUpperBound),
+	}
+	iter, err := snapshotDB.NewIter(&iterOptions)
+	return iter, err
 }
 
 // TODO: call this when handling graceful shutdown

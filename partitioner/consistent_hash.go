@@ -11,12 +11,13 @@ type ConsistentHashPartitioner struct {
 }
 
 func (p *ConsistentHashPartitioner) GetPartitions(key []byte) ([]NodeID, error) {
-	hashGenerator := utils.SHA256HashGenerator{}
+	//hashGenerator := utils.SHA256HashGenerator{}
+	hashGenerator := utils.Murmur3HashGenerator{}
 	keyHash := hashGenerator.GenerateHash(key)
 
 	// Use last few bits of hash (to avoid integer overflows) mod cluster_size to decide which server to use
 	idx := 0
-	for idx < p.nodeState.N && string(p.nodeState.ClusterIDs[idx]) < keyHash {
+	for idx < p.nodeState.N && p.nodeState.ClusterIDs[idx] < keyHash {
 		idx += 1
 	}
 	preferenceList := make([]NodeID, p.nodeState.ReplicationFactor)
