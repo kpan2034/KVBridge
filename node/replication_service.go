@@ -3,6 +3,7 @@ package node
 import (
 	"KVBridge/proto/compiled/replication"
 	"KVBridge/storage"
+	. "KVBridge/types"
 	"context"
 	"errors"
 )
@@ -10,12 +11,51 @@ import (
 func (m *Messager) ReplicateWrite(ctx context.Context, in *replication.ReplicateWriteRequest) (*replication.ReplicateWriteResponse, error) {
 	m.Logger.Debugf("received replicatewrite request: %v", in)
 
-	key := in.GetKey()
-	value := in.GetValue()
+	inKey := in.GetKey()
+	inVal := in.GetValue()
+	incomingID := NodeID(in.GetId())
 
-	err := m.node.Storage.Set(key, value)
+	// decode incoming key to a KeyType
+	key, err := DecodeToKeyType(inKey)
 	if err != nil {
-		m.Logger.Errorf("could not replicate: (key:%v, value:%v): %v", key, value, err)
+		return nil, err
+	}
+
+	// decode incoming value to a ValueType
+	incomingValue, err := DecodeToValueType(inVal)
+	if err != nil {
+		return nil, err
+	}
+
+	myValue, err := m.node.Storage.Get(key.Key())
+	if err == storage.ErrNotFound {
+		err = nil
+	}
+	if err != nil {
+		// m.Logger.Errorf("could not key: (key:%v, value:%v): %v", key, myValue, err)
+		return nil, err
+	}
+
+	// convert my value to a ValueType
+	myValueDecoded, err := DecodeToValueType(myValue)
+	if err != nil {
+		return nil, err
+	}
+
+	shouldUpdate := m.node.ShouldUpdate(myValueDecoded, incomingValue, incomingID)
+
+	if !shouldUpdate {
+		// Ideally we should tell them that their version is outdated
+		// But we just return false
+		// If they want a new version they can request for it later
+		return &replication.ReplicateWriteResponse{
+			Ok: false,
+		}, nil
+	}
+
+	err = m.node.Storage.Set(key.Key(), incomingValue.Value())
+	if err != nil {
+		m.Logger.Errorf("could not replicate: (key:%v, value:%v): %v", key, incomingValue, err)
 	}
 
 	return &replication.ReplicateWriteResponse{
@@ -26,9 +66,13 @@ func (m *Messager) ReplicateWrite(ctx context.Context, in *replication.Replicate
 func (m *Messager) GetKey(ctx context.Context, in *replication.GetKeyRequest) (*replication.GetKeyResponse, error) {
 	m.Logger.Debugf("received getkey request: %v", in)
 
-	key := in.GetKey()
+	inKey := in.GetKey()
+	key, err := DecodeToKeyType(inKey)
+	if err != nil {
+		return nil, err
+	}
 
-	value, err := m.node.Storage.Get(key)
+	value, err := m.node.Storage.Get(key.Key())
 	if errors.Is(err, storage.ErrNotFound) {
 		resp := &replication.GetKeyResponse{
 			Ok:    false,
@@ -45,4 +89,21 @@ func (m *Messager) GetKey(ctx context.Context, in *replication.GetKeyRequest) (*
 		Value: value,
 	}
 	return resp, nil
+}
+
+func (node *KVNode) ShouldUpdate(myVal *ValueType, newVal *ValueType, tieBreaker NodeID) bool {
+	if newVal == nil {
+		return false
+	}
+	if myVal == nil {
+		return true
+	}
+	res := CompareTimestamps(myVal.Version(), newVal.Version())
+	if res == 0 {
+		// update only if other node has higher id
+		return node.ID <= tieBreaker
+	}
+
+	// update only if my version is lower
+	return (res == -1)
 }

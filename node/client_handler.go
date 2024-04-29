@@ -1,8 +1,6 @@
 package node
 
 import (
-	"KVBridge/storage"
-	"errors"
 	"fmt"
 
 	"github.com/tidwall/redcon"
@@ -116,18 +114,11 @@ func (node *KVNode) setHandler(conn redcon.Conn, cmd redcon.Command) {
 	// TODO: PREPEND KEY WITH HASH
 	key := cmd.Args[1]
 	value := cmd.Args[2]
-	err := node.Storage.Set(key, value)
-	if err != nil {
-		conn.WriteError(fmt.Sprintf("ERR could not set (%s = %s)", string(key), string(value)))
-	}
 
-	// Ping other node (testing gossip)
-	nacks, err := node.ReplicateWrites(key, value)
+	err := node.Write(key, value)
 	if err != nil {
-		// just error out for now, later should just log
-		conn.WriteError(fmt.Sprintf("ERR could not replicate (%s = %s)", string(key), string(value)))
+		conn.WriteError(fmt.Sprintf("ERR could not set (%s = %s): %v", string(key), string(value), err))
 	}
-	node.Logger.Debugf("replicated to %d other nodes", nacks)
 	conn.WriteString("OK")
 }
 
@@ -137,35 +128,12 @@ func (node *KVNode) getHandler(conn redcon.Conn, cmd redcon.Command) {
 		return
 	}
 	key := cmd.Args[1]
-	value, err := node.Storage.Get(key)
-	// if it's a not found error, we can still go get the key from other nodes
-	if errors.Is(err, storage.ErrNotFound) {
-		err = nil
-		// conn.WriteError(fmt.Sprintf("ERR no value associated with key: %s", string(key)))
-		// return
-	}
+	value, err := node.Read(key)
 	if err != nil {
 		conn.WriteError(fmt.Sprintf("ERR could not get %s", string(key)))
 		return
 	}
-
-	// Reconcile value of the key with other nodes
-	majorityValue, err := node.ReconcileKeyValue(key, value)
-	// TODO: if this errors out, check if you can serve the local value directly
-	if err != nil {
-		conn.WriteError(fmt.Sprintf("ERR could not reconcile value of %s", string(key)))
-		return
-	}
-
-	// Ping other node (testing gossip)
-	// _ = node.Messager.PingEverybody(context.Background())
-	// _, err = node.Messager.PingRequest(context.Background(), &pb.PingRequest{
-	// 	Msg: "hi",
-	// })
-	// if err != nil {
-	// 	node.Logger.Errorf("err messaging node: %v", err)
-	// }
-	conn.WriteBulk(majorityValue)
+	conn.WriteBulk(value)
 }
 
 func (node *KVNode) pingHandler(conn redcon.Conn, cmd redcon.Command) {

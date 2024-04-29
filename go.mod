@@ -16,6 +16,19 @@ require (
 )
 
 require (
+	github.com/cockroachdb/pebble v1.1.0
+	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0
+	github.com/knadh/koanf v1.5.0
+	github.com/mitchellh/mapstructure v1.5.0
+	github.com/spaolacci/murmur3 v1.1.0
+	github.com/spf13/pflag v1.0.5
+	github.com/tidwall/redcon v1.6.2
+	go.uber.org/zap v1.27.0
+	google.golang.org/grpc v1.63.2
+	google.golang.org/protobuf v1.33.0
+)
+
+require (
 	github.com/DataDog/zstd v1.5.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

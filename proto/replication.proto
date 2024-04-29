@@ -17,8 +17,11 @@ service ReplicationService {
 message ReplicateWriteRequest {
   // bool deferred = 1; // can the write be deferred? used when ack is not
   // needed AFTER write is made durable
-  bytes key = 1;
-  bytes value = 2;
+  // In this case the client can get away with writing this value only to the
+  // WAL and only syncing periodically
+  string id = 1;
+  bytes key = 2;
+  bytes value = 3;
 }
 
 message ReplicateWriteResponse { bool ok = 1; }
