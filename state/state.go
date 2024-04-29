@@ -35,7 +35,7 @@ func GetInitialState(conf *config.Config) *State {
 	ids, idMap := getNodeIds(conf.BootstrapServers)
 	N := len(conf.BootstrapServers)
 
-	keyRanges := make([]NodeRange, conf.ReplicationFactor)
+	// keyRanges := make([]NodeRange, conf.ReplicationFactor)
 	currNodeIdx := 0
 	for ids[currNodeIdx] != currNodeId {
 		currNodeIdx += 1

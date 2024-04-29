@@ -17,6 +17,10 @@ func NewValueType(value []byte) *ValueType {
 	}
 }
 
+func (vt *ValueType) Value() []byte {
+	return vt.value
+}
+
 // get version
 func (vt *ValueType) Version() Timestamp {
 	return vt.version
@@ -25,6 +29,11 @@ func (vt *ValueType) Version() Timestamp {
 // increase the local copy of the timestamp
 func (vt *ValueType) Tick() {
 	vt.version = vt.version.Send()
+}
+
+func (vt *ValueType) UpdateValue(val []byte) {
+	vt.value = val
+	// vt.Tick()
 }
 
 // update the copy of the timestamp with an incoming timestamp
@@ -43,6 +52,10 @@ func (vt *ValueType) Encode() []byte {
 }
 
 func DecodeToValueType(b []byte) (*ValueType, error) {
+	if b == nil {
+		return &ValueType{}, nil
+	}
+
 	version, err := DecodeToTimestamp(b[:8])
 	if err != nil {
 		return nil, err
@@ -51,4 +64,9 @@ func DecodeToValueType(b []byte) (*ValueType, error) {
 		value:   b[8:],
 		version: version,
 	}, nil
+}
+
+// for testing only
+func NewValueTypeWithTimestamp(val []byte, t Timestamp) *ValueType {
+	return &ValueType{val, t}
 }

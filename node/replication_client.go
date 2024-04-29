@@ -3,14 +3,14 @@ package node
 import (
 	"KVBridge/proto/compiled/replication"
 	// "sync"
-	// . "KVBridge/types"
+	. "KVBridge/types"
 	"context"
 	"sync/atomic"
 )
 
 // Initiates ReplicateWriteRequest
-func (m *Messager) ReplicateWrites(key, value []byte) (nacks int, err error) {
-	m.Logger.Debugf("replicating write: (%d, %d)", key, value)
+func (m *Messager) ReplicateWrites(key *KeyType, value *ValueType) (nacks int, err error) {
+	m.Logger.Debugf("replicating write: (%v, %v)", key, value)
 
 	var acks atomic.Int32
 	// var wg sync.WaitGroup
@@ -22,8 +22,8 @@ func (m *Messager) ReplicateWrites(key, value []byte) (nacks int, err error) {
 		}
 		// go func() {
 		in := &replication.ReplicateWriteRequest{
-			Key:   key,
-			Value: value,
+			Key:   key.Encode(),
+			Value: value.Encode(),
 		}
 		cl := m.getClient(id)
 		resp, err := cl.ReplicateWrite(context.TODO(), in)
@@ -45,13 +45,14 @@ func (m *Messager) ReplicateWrites(key, value []byte) (nacks int, err error) {
 // If no majority value exists then returns votedValue is nil
 // If the node calling ReconcileKeyValue does not have a value associated with the provided key
 // then myValue can be nil
-func (m *Messager) ReconcileKeyValue(key []byte, myValue []byte) (votedValue []byte, err error) {
+func (m *Messager) ReconcileKeyValue(key *KeyType, myValue *ValueType) (votedValue []byte, err error) {
 	m.Logger.Debugf("getting value of key: %s from all nodes", key)
 
-	// convert []byte key to a string -- there needs to be a better way of doing this btw
+	// note: for comparision, []byte keys are converted to a string
+	// sigh -- there needs to be a better way of doing this btw
 	voteMap := make(map[string]int)
 	if myValue != nil {
-		voteMap[string(myValue)] = 1
+		voteMap[string(myValue.Value())] = 1
 	}
 
 	for _, id := range m.ClusterIDs {
@@ -61,7 +62,7 @@ func (m *Messager) ReconcileKeyValue(key []byte, myValue []byte) (votedValue []b
 
 		// Make the request
 		in := &replication.GetKeyRequest{
-			Key: key,
+			Key: key.Encode(),
 		}
 
 		cl := m.getClient(id)

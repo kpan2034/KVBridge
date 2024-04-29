@@ -2,17 +2,24 @@ package types
 
 // type of keys handled by the node
 type KeyType struct {
-	hashKey string
-	key     []byte
+	hash string
+	key  []byte
 }
 
 // wrap a key in a KeyType
 func NewKeyType(key []byte) *KeyType {
 	// hash := getHash(key)
 	return &KeyType{
-		hashKey: "",
-		key:     key,
+		hash: "",
+		key:  key,
 	}
+}
+
+func (kt *KeyType) Key() []byte {
+	return kt.key
+}
+func (kt *KeyType) Hash() string {
+	return kt.hash
 }
 
 // KeyType implements the Stringer interface
@@ -26,7 +33,7 @@ func (kt *KeyType) Encode() []byte {
 
 func DecodeToKeyType(b []byte) (*KeyType, error) {
 	return &KeyType{
-		hashKey: "",
-		key:     b,
+		hash: "",
+		key:  b,
 	}, nil
 }

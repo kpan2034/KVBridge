@@ -101,6 +101,7 @@ func (t Timestamp) String() string {
 
 func (t Timestamp) Encode() []byte {
 	b := make([]byte, 8)
+	// we don't actually care about the endianess of the timestamp
 	binary.LittleEndian.PutUint64(b, t.ts)
 	return b
 }
@@ -113,4 +114,16 @@ func DecodeToTimestamp(b []byte) (Timestamp, error) {
 		return Timestamp{}, err
 	}
 	return Timestamp{ts: ts}, nil
+}
+
+func CompareTimestamps(t1 Timestamp, t2 Timestamp) int {
+	if t1.Equals(t2) {
+		return 0
+	}
+
+	if t1.Max(t2).Equals(t1) {
+		return 1
+	}
+
+	return -1
 }
