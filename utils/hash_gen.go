@@ -1,15 +1,15 @@
 package utils
 
 import (
+	"KVBridge/types"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"github.com/spaolacci/murmur3"
-	"strconv"
 )
 
 type HashGenerator interface {
-	GenerateHash(plaintext []byte) string
+	GenerateHash(plaintext []byte) types.NodeID
 }
 
 type SHA256HashGenerator struct {
@@ -37,7 +37,7 @@ func (h *SHA256HashGenerator) GenerateHash(plaintext []byte) string {
 
 type Murmur3HashGenerator struct{}
 
-func (h *Murmur3HashGenerator) GenerateHash(plaintext []byte) string {
+func (h *Murmur3HashGenerator) GenerateHash(plaintext []byte) types.NodeID {
 	hash := murmur3.New32()
 
 	_, err := hash.Write(plaintext)
@@ -46,5 +46,5 @@ func (h *Murmur3HashGenerator) GenerateHash(plaintext []byte) string {
 		fmt.Printf("ERROR: unable to generate hash %s", err)
 	}
 
-	return strconv.Itoa(int(hash.Sum32()))
+	return types.NodeID(hash.Sum32())
 }

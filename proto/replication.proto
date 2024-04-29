@@ -10,6 +10,8 @@ service ReplicationService {
   // just a simple replicate write function that always replicate
   rpc ReplicateWrite(ReplicateWriteRequest) returns (ReplicateWriteResponse);
   rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
+
+  rpc GetMerkleTree(MerkleTreeRequest) returns (MerkleTreeResponse);
 }
 
 message ReplicateWriteRequest {
@@ -29,4 +31,14 @@ message GetKeyRequest { bytes key = 1; }
 message GetKeyResponse {
   bool ok = 1;
   bytes value = 2;
+}
+
+// Merkle tree
+message MerkleTreeRequest {
+  uint32 keyRangeLowerBound = 1;
+  uint32 keyRangeUpperBound = 2;
+}
+
+message MerkleTreeResponse {
+  repeated uint32 data = 1;
 }

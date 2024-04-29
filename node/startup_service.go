@@ -13,6 +13,6 @@ import (
 func (s *startupServer) GetNodeInfo(ctx context.Context, in *startup.GetNodeInfoRequest) (*startup.GetNodeInfoResponse, error) {
 	s.Logger.Debugf("received getnodeinfo request: %v", in)
 	return &startup.GetNodeInfoResponse{
-		Id: string(s.State.ID),
+		Id: uint32(s.State.ID),
 	}, nil
 }
