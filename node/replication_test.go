@@ -2,6 +2,7 @@ package node_test
 
 import (
 	"KVBridge/node"
+	. "KVBridge/types"
 	"bytes"
 	"testing"
 )
@@ -24,10 +25,13 @@ func TestMessager_ReplicateWrites(t *testing.T) {
 			key := []byte(keys[i])
 			value := []byte(values[i])
 
+			kt := NewKeyType(key)
+			vt := NewValueType(value)
+
 			// Write key value pair to local storage
-			node1.Storage.Set(key, value)
+			node1.Storage.Set(kt.Encode(), vt.Encode())
 			// Replicate (key, value) to other nodes
-			nacks, err := node1.ReplicateWrites(key, value)
+			nacks, err := node1.ReplicateWrites(kt, vt)
 			if err != nil {
 				t.Errorf("error making request: %v", err)
 			}
@@ -37,11 +41,15 @@ func TestMessager_ReplicateWrites(t *testing.T) {
 
 			// Check that replication happened succesfully
 			for _, n := range []*node.KVNode{node2, node3} {
-				val, err := node2.Storage.Get(key)
+				val, err := n.Storage.Get(kt.Encode())
 				if err != nil {
 					t.Errorf("node %v: could not get key %v", n.ID, key)
 				}
-				if !bytes.Equal(value, val) {
+				localVt, err := DecodeToValueType(val)
+				if err != nil {
+					t.Errorf("node %v: could not decode value %v", n.ID, val)
+				}
+				if !bytes.Equal(value, localVt.Value()) {
 					t.Errorf("node %v: expected: %v, got: %v", n.ID, value, val)
 				}
 			}
@@ -57,6 +65,8 @@ func TestMessager_ReconcileKey(t *testing.T) {
 	values := []string{"1", "2", "5", "9", "10"}
 	staleValue := []byte("0")
 
+	stale_vt := NewValueType(staleValue)
+
 	ids := node1.ClusterIDs
 
 	for _, id := range ids {
@@ -67,6 +77,8 @@ func TestMessager_ReconcileKey(t *testing.T) {
 		for i := range keys {
 			key := []byte(keys[i])
 			value := []byte(values[i])
+			kt := NewKeyType(key)
+			vt := NewValueType(value)
 
 			// Write invalid key value pair to local storage
 			err := node1.Storage.Set(key, staleValue)
@@ -74,16 +86,16 @@ func TestMessager_ReconcileKey(t *testing.T) {
 				t.Errorf("error writing to node %v: (key: %v, value: %v)", node1.ID, key, staleValue)
 			}
 			// Write correct key value pairs to local storage of other nodes
-			err = node2.Storage.Set(key, value)
+			err = node2.Storage.Set(key, vt.Encode())
 			if err != nil {
 				t.Errorf("error writing to node %v: (key: %v, value: %v)", node2.ID, key, value)
 			}
-			err = node3.Storage.Set(key, value)
+			err = node3.Storage.Set(key, vt.Encode())
 			if err != nil {
 				t.Errorf("error writing to node %v: (key: %v, value: %v)", node3.ID, key, value)
 			}
 			// reconcile value from other nodes
-			majValue, err := node1.ReconcileKeyValue(key, staleValue)
+			majValue, err := node1.ReconcileKeyValue(kt, stale_vt)
 			if err != nil {
 				t.Errorf("error making request: %v", err)
 			}

@@ -53,7 +53,7 @@ func (m *Messager) ReplicateWrite(ctx context.Context, in *replication.Replicate
 		}, nil
 	}
 
-	err = m.node.Storage.Set(key.Key(), incomingValue.Value())
+	err = m.node.Storage.Set(key.Encode(), incomingValue.Encode())
 	if err != nil {
 		m.Logger.Errorf("could not replicate: (key:%v, value:%v): %v", key, incomingValue, err)
 	}

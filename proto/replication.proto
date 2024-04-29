@@ -19,7 +19,7 @@ message ReplicateWriteRequest {
   // needed AFTER write is made durable
   // In this case the client can get away with writing this value only to the
   // WAL and only syncing periodically
-  string id = 1;
+  uint32 id = 1;
   bytes key = 2;
   bytes value = 3;
 }
@@ -39,6 +39,4 @@ message MerkleTreeRequest {
   uint32 keyRangeUpperBound = 2;
 }
 
-message MerkleTreeResponse {
-  repeated uint32 data = 1;
-}
+message MerkleTreeResponse { repeated uint32 data = 1; }
