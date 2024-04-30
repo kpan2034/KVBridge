@@ -1,16 +1,21 @@
 package types
 
+import (
+	"encoding/binary"
+)
+
 // type of keys handled by the node
 type KeyType struct {
-	hash string
+	hash uint32
 	key  []byte
 }
 
 // wrap a key in a KeyType
 func NewKeyType(key []byte) *KeyType {
-	// hash := getHash(key)
+	hashGenerator := Murmur3HashGenerator{}
+	hash := uint32(hashGenerator.GenerateHash(key))
 	return &KeyType{
-		hash: "",
+		hash: hash,
 		key:  key,
 	}
 }
@@ -18,7 +23,7 @@ func NewKeyType(key []byte) *KeyType {
 func (kt *KeyType) Key() []byte {
 	return kt.key
 }
-func (kt *KeyType) Hash() string {
+func (kt *KeyType) Hash() uint32 {
 	return kt.hash
 }
 
@@ -28,12 +33,14 @@ func (kt *KeyType) String() string {
 }
 
 func (kt *KeyType) Encode() []byte {
-	return kt.key
+	hashBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(hashBytes, kt.hash)
+	return append(hashBytes, kt.key...)
 }
 
 func DecodeToKeyType(b []byte) (*KeyType, error) {
 	return &KeyType{
-		hash: "",
-		key:  b,
+		hash: binary.BigEndian.Uint32(b[:4]),
+		key:  b[4:],
 	}, nil
 }

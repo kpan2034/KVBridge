@@ -4,6 +4,7 @@ import (
 	. "KVBridge/environment"
 	"KVBridge/types"
 	"github.com/cockroachdb/pebble"
+	"math"
 )
 
 var ErrNotFound = pebble.ErrNotFound
@@ -14,7 +15,7 @@ type StorageEngine interface {
 	Get(key []byte) ([]byte, error)
 	Close() error
 	Snapshot(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([][]byte, [][]byte, error)
-	GetSnapshotIter(keyLowerBound types.NodeID, keyUpperBound types.NodeID) (StorageIterator, error) // TODO: Decouple from pebble iterator
+	GetSnapshotIter(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([]StorageIterator, error) // TODO: Decouple from pebble iterator
 }
 
 type PebbleStorageManager struct {
@@ -114,16 +115,35 @@ type StorageIterator interface {
 	Key() []byte
 	Next() bool
 	First() bool
+	Close() error
 }
 
-func (pb *PebbleStorageManager) GetSnapshotIter(keyLowerBound types.NodeID, keyUpperBound types.NodeID) (StorageIterator, error) {
+func (pb *PebbleStorageManager) GetSnapshotIter(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([]StorageIterator, error) {
 	snapshotDB := pb.db.NewSnapshot()
-	iterOptions := pebble.IterOptions{
-		LowerBound: types.ToBytes(keyLowerBound),
-		UpperBound: types.ToBytes(keyUpperBound),
+	if keyLowerBound <= keyUpperBound {
+		iterOptions := pebble.IterOptions{
+			LowerBound: types.ToBytes(keyLowerBound),
+			UpperBound: types.ToBytes(keyUpperBound),
+		}
+		iter, err := snapshotDB.NewIter(&iterOptions)
+		return []StorageIterator{iter}, err
+	} else {
+		iterOptions1 := pebble.IterOptions{
+			LowerBound: types.ToBytes(0),
+			UpperBound: types.ToBytes(keyUpperBound),
+		}
+		iter1, err := snapshotDB.NewIter(&iterOptions1)
+		if err != nil {
+			return nil, err
+		}
+		iterOptions2 := pebble.IterOptions{
+			LowerBound: types.ToBytes(keyLowerBound),
+			UpperBound: types.ToBytes(math.MaxUint32),
+		}
+		iter2, err := snapshotDB.NewIter(&iterOptions2)
+		return []StorageIterator{iter1, iter2}, err
 	}
-	iter, err := snapshotDB.NewIter(&iterOptions)
-	return iter, err
+
 }
 
 // TODO: call this when handling graceful shutdown

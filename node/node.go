@@ -66,21 +66,16 @@ func (kvNode *KVNode) Recover() error {
 		}
 
 		// Take a snapshot of data
-		snapshotIter, err := kvNode.Storage.GetSnapshotIter(keyrange.StartHash, keyrange.EndHash)
+		snapshotIters, err := kvNode.Storage.GetSnapshotIter(keyrange.StartHash, keyrange.EndHash)
 		if err != nil {
 			return err
 		}
 
 		// Create merkle tree on S and D for each key range
-		destMerkleTree, err := BuildMerkleTree(keyrange, snapshotIter)
+		destMerkleTree, err := BuildMerkleTree(keyrange, snapshotIters)
 		if err != nil {
 			return err
 		}
-		temp := uint32(0)
-		for _, num := range destMerkleTree.Data {
-			temp += num
-		}
-		fmt.Printf("%v", temp)
 
 		srcMerkleTree, err := kvNode.FetchMerkleTree(sourceNode, uint32(keyrange.StartHash), uint32(keyrange.EndHash))
 		if err != nil {
@@ -88,14 +83,13 @@ func (kvNode *KVNode) Recover() error {
 		}
 
 		diffs, err := DiffMerkleTree(srcMerkleTree, destMerkleTree)
-		if err != nil || diffs != nil {
+		if err != nil && diffs != nil {
 			return err
 		}
-		// TODO: finish this
 
-		// Fetch data from S for the problematic keys
+		// TODO: Fetch data from S for the problematic keys, needs new RPC
 
-		// Update D with received data
+		// TODO: Update D with received data
 
 	}
 

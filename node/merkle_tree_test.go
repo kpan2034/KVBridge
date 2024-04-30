@@ -2,6 +2,7 @@ package node_test
 
 import (
 	"KVBridge/node"
+	"KVBridge/storage"
 	"KVBridge/types"
 	"testing"
 )
@@ -32,6 +33,8 @@ func (it *TestIterator) First() bool {
 	return it.Idx < len(it.TestKeys)
 }
 
+func (it *TestIterator) Close() error { return nil }
+
 func TestBuildMerkleTree(t *testing.T) {
 	iter := TestIterator{Idx: 0}
 	iter.TestKeys = make([][]byte, 4)
@@ -41,7 +44,7 @@ func TestBuildMerkleTree(t *testing.T) {
 	iter.TestKeys[3] = []byte{0, 0, 0, 7}
 	nr := types.NodeRange{StartHash: 0, EndHash: 15}
 
-	mt, err := node.BuildMerkleTree(nr, &iter)
+	mt, err := node.BuildMerkleTree(nr, []storage.StorageIterator{&iter})
 	t.Logf("%v", mt.Data)
 	if err != nil {
 		t.Errorf("Failed building merkel tree: %s", err)
@@ -58,7 +61,8 @@ func TestDiffMerkleTree(t *testing.T) {
 	iter1.TestKeys[1] = []byte{0, 0, 0, 2}
 	iter1.TestKeys[2] = []byte{0, 0, 0, 7}
 	nr := types.NodeRange{StartHash: 0, EndHash: 15}
-	destMerkleTree, err := node.BuildMerkleTree(nr, &iter1)
+	//nr := types.NodeRange{StartHash: 6, EndHash: 1}
+	destMerkleTree, err := node.BuildMerkleTree(nr, []storage.StorageIterator{&iter1, &iter1})
 	if err != nil {
 		t.Errorf("Failed building merkel tree: %s", err)
 	}
@@ -68,7 +72,7 @@ func TestDiffMerkleTree(t *testing.T) {
 	iter2.TestKeys[1] = []byte{0, 0, 0, 2}
 	iter2.TestKeys[2] = []byte{0, 0, 0, 4}
 	iter2.TestKeys[3] = []byte{0, 0, 0, 7}
-	sourceMerkleTree, err := node.BuildMerkleTree(nr, &iter2)
+	sourceMerkleTree, err := node.BuildMerkleTree(nr, []storage.StorageIterator{&iter2, &iter2})
 	if err != nil {
 		t.Errorf("Failed building merkel tree: %s", err)
 	}

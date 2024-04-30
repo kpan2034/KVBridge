@@ -6,7 +6,7 @@ import (
 	"KVBridge/proto/compiled/startup"
 	. "KVBridge/types"
 	"context"
-	"fmt"
+	"encoding/binary"
 	"math"
 	"os"
 	"testing"
@@ -191,66 +191,96 @@ func TestMessager_StartupService(t *testing.T) {
 }
 
 func TestMessager_Recover(t *testing.T) {
-	_, node1, _, _, cancelFunc1, cancelFunc2, cancelFunc3 := setupTest2(t, 2)
+	_, node1, node2, _, cancelFunc1, cancelFunc2, cancelFunc3 := setupTest2(t, 3)
 
 	err := node1.Write([]byte("testKey1"), []byte("testVal1"))
 	if err != nil {
 		t.Errorf("TestMessager_Recover failed %s", err)
 	}
 
-	iter, err := node1.Storage.GetSnapshotIter(0, math.MaxUint32)
-	if err != nil {
-		t.Errorf("TestMessager_Recover failed %s", err)
-	}
-	iter.First()
-	if !iter.Valid() {
-		fmt.Printf("iterator not valid")
-	} else {
-		fmt.Printf("^^^^ %v ^^^^", iter.Key())
-	}
-
-	//cancelFunc1()
-	//err = node2.Write([]byte("testKey2"), []byte("testVal2"))
-	//if err != nil {
-	//	t.Errorf("TestMessager_Recover failed %s", err)
-	//}
-	//
-	//c1 := &config.Config{
-	//	Address:           ":6379",
-	//	Grpc_address:      "localhost:50051",
-	//	LogPath:           "stdout",
-	//	DataPath:          "./testing/storage",
-	//	BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
-	//	ReplicationFactor: 3,
-	//}
-	////node1_rec, node1RecCancelFunc, err := node.NewKVNode(c1)
-	//node1_rec, node1RecCancelFunc, err := node.NewKVNode(c1)
-	//
+	//nr := NodeRange{StartHash: 0, EndHash: math.MaxUint32}
+	//merkleTree, err := node.BuildMerkleTree(nr, iter)
 	//if err != nil {
 	//	t.Errorf("node1 creation failed: %v", err)
 	//}
-	//go func() {
-	//	err := node1_rec.Start()
-	//	if err != nil {
-	//		t.Errorf("node1 failed: %v", err)
-	//	}
-	//}()
-	//
-	//// Wait for servers to come up
-	//time.Sleep(1000 * time.Millisecond)
-	//
-	//err = node1_rec.Recover()
-	//
-	//if err != nil {
-	//	t.Errorf("Recover failed: %s", err)
-	//}
-	//
-	//err = os.RemoveAll("./testing")
-	//if err != nil {
-	//	t.Errorf("Recover failed: %s", err)
-	//}
-	//node1RecCancelFunc()
+	//fmt.Printf("$ %v $", merkleTree.Data[0])
+
+	cancelFunc1()
+	err = node2.Write([]byte("testKey2"), []byte("testVal2"))
+	if err != nil {
+		t.Errorf("TestMessager_Recover failed %s", err)
+	}
+
+	iters, err := node2.Storage.GetSnapshotIter(0, math.MaxUint32)
+	if err != nil {
+		t.Errorf("TestMessager_Recover failed %s", err)
+	}
+	iter := iters[0]
+	iter.First()
+	count := 0
+	lol_node2 := []string{}
+	lol_node2_hash := []uint32{}
+	for iter.Valid() {
+		count += 1
+		lol_node2 = append(lol_node2, string(iter.Key()))
+		hash := binary.BigEndian.Uint32(iter.Key()[:4])
+		lol_node2_hash = append(lol_node2_hash, hash)
+		iter.Next()
+	}
+	if count != 2 {
+		t.Errorf("Node 2 KeyCount : Expected %d Actual %d", 1, count)
+	}
+
+	c1 := &config.Config{
+		Address:           ":6379",
+		Grpc_address:      "localhost:50051",
+		LogPath:           "stdout",
+		DataPath:          "./testing/storage",
+		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
+		ReplicationFactor: 3,
+	}
+	lol_node1 := []string{}
+	//node1_rec, node1RecCancelFunc, err := node.NewKVNode(c1)
+	node1_rec, node1RecCancelFunc, err := node.NewKVNode(c1)
+	iters, err = node1_rec.Storage.GetSnapshotIter(0, math.MaxUint32)
+	if err != nil {
+		t.Errorf("TestMessager_Recover failed %s", err)
+	}
+	iter = iters[0]
+	iter.First()
+	count = 0
+	for iter.Valid() {
+		count += 1
+		lol_node1 = append(lol_node1, string(iter.Key()))
+		iter.Next()
+	}
+	if count != 1 {
+		t.Errorf("node1_rec KeyCount : Expected %d Actual %d", 1, count)
+	}
+	if err != nil {
+		t.Errorf("node1 creation failed: %v", err)
+	}
+	go func() {
+		err := node1_rec.Start()
+		if err != nil {
+			t.Errorf("node1 failed: %v", err)
+		}
+	}()
+
+	// Wait for servers to come up
+	time.Sleep(1000 * time.Millisecond)
+
+	err = node1_rec.Recover()
+
+	if err != nil {
+		t.Errorf("Recover failed: %s", err)
+	}
+
+	err = os.RemoveAll("./testing")
+	if err != nil {
+		t.Errorf("Recover failed: %s", err)
+	}
+	node1RecCancelFunc()
 	cancelFunc2()
 	cancelFunc3()
-	cancelFunc1()
 }

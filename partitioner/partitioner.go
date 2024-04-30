@@ -3,7 +3,6 @@ package partitioner
 import (
 	"KVBridge/state"
 	. "KVBridge/types"
-	"KVBridge/utils"
 	"strconv"
 )
 
@@ -26,7 +25,7 @@ type SimplePartitioner struct {
 
 // Simple partitioner, works only if no nodes enter/exit the system
 func (p *SimplePartitioner) GetPartitions(key []byte) ([]NodeID, error) {
-	hashGenerator := utils.SHA256HashGenerator{}
+	hashGenerator := SHA256HashGenerator{}
 	var keyHash = hashGenerator.GenerateHash(key)
 	var cluster_size int = p.nodeState.N
 	// Use last few bits of hash (to avoid integer overflows) mod cluster_size to decide which server to use
