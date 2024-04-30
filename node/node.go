@@ -112,7 +112,7 @@ func NewKVNode(config *config.Config) (*KVNode, func(), error) {
 	env := environment.New(logger, config, init_state)
 	node.Environment = env
 
-	logger.Debugf("creating kvnode with config: %v", config)
+	logger.Debugf("creating kvnode with config: %+v", config)
 
 	// Initialize storage engine
 	storage, err := storage.NewPebbleStorageEngine(env)

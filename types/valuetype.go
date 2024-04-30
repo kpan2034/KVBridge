@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"log"
 )
 
 // type of the values handled by the node
@@ -53,7 +54,13 @@ func (vt *ValueType) Encode() []byte {
 
 func DecodeToValueType(b []byte) (*ValueType, error) {
 	if b == nil {
-		return &ValueType{}, nil
+		return NewValueType(nil), nil
+	}
+
+	// TODO need to remove this check later, only for debugging
+	// logging every time is too slow lol
+	if len(b) <= 8 {
+		log.Printf("length of b not valid, got: %v", b)
 	}
 
 	version, err := DecodeToTimestamp(b[:8])

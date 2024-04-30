@@ -24,7 +24,12 @@ message ReplicateWriteRequest {
   bytes value = 3;
 }
 
-message ReplicateWriteResponse { bool ok = 1; }
+message ReplicateWriteResponse {
+  oneof resp {
+    bool ok = 1;
+    bytes value = 2;
+  }
+}
 
 message GetKeyRequest { bytes key = 1; }
 

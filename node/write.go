@@ -1,6 +1,10 @@
 package node
 
-import . "KVBridge/types"
+import (
+	"KVBridge/storage"
+	. "KVBridge/types"
+	"errors"
+)
 
 func (node *KVNode) Write(key []byte, value []byte) error {
 
@@ -8,6 +12,9 @@ func (node *KVNode) Write(key []byte, value []byte) error {
 
 	// Get the old version of the key
 	old_value, err := node.Storage.Get(kt.Encode())
+	if errors.Is(err, storage.ErrNotFound) {
+		err = nil
+	}
 	if err != nil {
 		return err
 	}
@@ -22,7 +29,7 @@ func (node *KVNode) Write(key []byte, value []byte) error {
 	vt.Tick()
 
 	// store new version + value
-	err = node.Storage.Set(kt.Encode(), vt.Value())
+	err = node.Storage.Set(kt.Encode(), vt.Encode())
 	if err != nil {
 		return err
 	}
