@@ -112,13 +112,23 @@ func (m *Messager) GetMerkleTree(ctx context.Context, req *replication.MerkleTre
 	lb := NodeID(req.KeyRangeLowerBound)
 	ub := NodeID(req.KeyRangeUpperBound)
 	nr := NodeRange{StartHash: lb, EndHash: ub}
-
-	snapshotIters, err := m.node.Storage.GetSnapshotIters(lb, ub)
+	snapshotDB := m.node.Storage.GetSnapshotDB()
+	snapshotIters, err := m.node.Storage.GetSnapshotIters(lb, ub, snapshotDB)
 	if err != nil {
 		return nil, err
 	}
 
 	merkleTree, err := BuildMerkleTree(nr, snapshotIters)
+	if err != nil {
+		return nil, err
+	}
+	for _, ssIter := range snapshotIters {
+		err := ssIter.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = snapshotDB.Close()
 	if err != nil {
 		return nil, err
 	}

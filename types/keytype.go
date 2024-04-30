@@ -26,6 +26,9 @@ func (kt *KeyType) Key() []byte {
 func (kt *KeyType) Hash() uint32 {
 	return kt.hash
 }
+func (kt *KeyType) SetHash(h uint32) {
+	kt.hash = h
+}
 
 // KeyType implements the Stringer interface
 func (kt *KeyType) String() string {

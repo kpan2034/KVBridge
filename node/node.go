@@ -57,6 +57,7 @@ func (kvNode *KVNode) Recover() error {
 	// Ranges of data handled by current node
 	keyRanges := kvNode.Environment.State.KeyRanges
 
+	snapshotDB := kvNode.Storage.GetSnapshotDB()
 	for _, keyrange := range keyRanges {
 
 		// Identify which node (S) to copy over data from to current node (D)
@@ -66,7 +67,7 @@ func (kvNode *KVNode) Recover() error {
 		}
 
 		// Take a snapshot of data
-		snapshotIters, err := kvNode.Storage.GetSnapshotIters(keyrange.StartHash, keyrange.EndHash)
+		snapshotIters, err := kvNode.Storage.GetSnapshotIters(keyrange.StartHash, keyrange.EndHash, snapshotDB)
 		if err != nil {
 			return err
 		}
@@ -75,6 +76,12 @@ func (kvNode *KVNode) Recover() error {
 		destMerkleTree, err := BuildMerkleTree(keyrange, snapshotIters)
 		if err != nil {
 			return err
+		}
+		for _, ssIter := range snapshotIters {
+			err := ssIter.Close()
+			if err != nil {
+				return err
+			}
 		}
 
 		srcMerkleTree, err := kvNode.FetchMerkleTree(sourceNode, uint32(keyrange.StartHash), uint32(keyrange.EndHash))
@@ -92,7 +99,10 @@ func (kvNode *KVNode) Recover() error {
 		// TODO: Update D with received data
 
 	}
-
+	err := snapshotDB.Close()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

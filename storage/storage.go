@@ -15,7 +15,8 @@ type StorageEngine interface {
 	Get(key []byte) ([]byte, error)
 	Close() error
 	Snapshot(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([][]byte, [][]byte, error)
-	GetSnapshotIters(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([]StorageIterator, error)
+	GetSnapshotIters(keyLowerBound types.NodeID, keyUpperBound types.NodeID, snapshot *pebble.Snapshot) ([]StorageIterator, error)
+	GetSnapshotDB() *pebble.Snapshot
 }
 
 type PebbleStorageManager struct {
@@ -118,8 +119,7 @@ type StorageIterator interface {
 	Close() error
 }
 
-func (pb *PebbleStorageManager) GetSnapshotIters(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([]StorageIterator, error) {
-	snapshotDB := pb.db.NewSnapshot()
+func (pb *PebbleStorageManager) GetSnapshotIters(keyLowerBound types.NodeID, keyUpperBound types.NodeID, snapshotDB *pebble.Snapshot) ([]StorageIterator, error) {
 	if keyLowerBound <= keyUpperBound {
 		iterOptions := pebble.IterOptions{
 			LowerBound: types.ToBytes(keyLowerBound),
@@ -146,7 +146,17 @@ func (pb *PebbleStorageManager) GetSnapshotIters(keyLowerBound types.NodeID, key
 
 }
 
+func (pb *PebbleStorageManager) GetSnapshotDB() *pebble.Snapshot {
+	return pb.db.NewSnapshot()
+}
+
 // TODO: call this when handling graceful shutdown
 func (pb *PebbleStorageManager) Close() error {
-	return pb.db.Close()
+	if pb.db != nil {
+		err := pb.db.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
