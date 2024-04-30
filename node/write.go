@@ -1,13 +1,24 @@
 package node
 
-import . "KVBridge/types"
+import (
+	"KVBridge/storage"
+	. "KVBridge/types"
+	"errors"
+)
 
 func (node *KVNode) Write(key []byte, value []byte) error {
+	return node.WriteWithReplicate(key, value, true)
+}
+
+func (node *KVNode) WriteWithReplicate(key []byte, value []byte, replicate bool) error {
 
 	kt := NewKeyType(key)
 
 	// Get the old version of the key
 	old_value, err := node.Storage.Get(kt.Encode())
+	if errors.Is(err, storage.ErrNotFound) {
+		err = nil
+	}
 	if err != nil {
 		return err
 	}
@@ -28,13 +39,14 @@ func (node *KVNode) Write(key []byte, value []byte) error {
 	}
 	node.Logger.Debugf("wrote (%v:%v) to local storage", kt, vt)
 
-	// replicate write to other node
-	nacks, err := node.ReplicateWrites(kt, vt)
-	if err != nil {
-		// just error out for now, later should just log
-		return err
+	if replicate {
+		// replicate write to other node
+		nacks, err := node.ReplicateWrites(kt, vt)
+		if err != nil {
+			// just error out for now, later should just log
+			return err
+		}
+		node.Logger.Debugf("replicated to %d other nodes", nacks)
 	}
-	node.Logger.Debugf("replicated to %d other nodes", nacks)
-
 	return nil
 }

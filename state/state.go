@@ -3,7 +3,6 @@ package state
 import (
 	"KVBridge/config"
 	. "KVBridge/types"
-	"KVBridge/utils"
 	"sort"
 )
 
@@ -60,7 +59,7 @@ func GetInitialState(conf *config.Config) *State {
 
 func getNodeIds(serverAddresses []string) ([]NodeID, map[NodeID]*NodeInfo) {
 	//hashGenerator := utils.SHA256HashGenerator{}
-	hashGenerator := utils.Murmur3HashGenerator{}
+	hashGenerator := Murmur3HashGenerator{}
 	output := make([]NodeID, len(serverAddresses))
 	idMap := make(map[NodeID]*NodeInfo)
 	for i, addr := range serverAddresses {
