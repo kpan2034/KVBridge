@@ -1,7 +1,6 @@
-package utils
+package types
 
 import (
-	"KVBridge/types"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -9,7 +8,7 @@ import (
 )
 
 type HashGenerator interface {
-	GenerateHash(plaintext []byte) types.NodeID
+	GenerateHash(plaintext []byte) NodeID
 }
 
 type SHA256HashGenerator struct {
@@ -37,7 +36,7 @@ func (h *SHA256HashGenerator) GenerateHash(plaintext []byte) string {
 
 type Murmur3HashGenerator struct{}
 
-func (h *Murmur3HashGenerator) GenerateHash(plaintext []byte) types.NodeID {
+func (h *Murmur3HashGenerator) GenerateHash(plaintext []byte) NodeID {
 	hash := murmur3.New32()
 
 	_, err := hash.Write(plaintext)
@@ -46,5 +45,5 @@ func (h *Murmur3HashGenerator) GenerateHash(plaintext []byte) types.NodeID {
 		fmt.Printf("ERROR: unable to generate hash %s", err)
 	}
 
-	return types.NodeID(hash.Sum32())
+	return NodeID(hash.Sum32())
 }

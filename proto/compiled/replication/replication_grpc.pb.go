@@ -23,11 +23,12 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ReplicationServiceClient interface {
 	// replicate a single op, ideally it should be a single
-	// function that takes in the op + args the client recieved but for now
+	// function that takes in the op + args the client received but for now
 	// just a simple replicate write function that always replicate
 	ReplicateWrite(ctx context.Context, in *ReplicateWriteRequest, opts ...grpc.CallOption) (*ReplicateWriteResponse, error)
 	GetKey(ctx context.Context, in *GetKeyRequest, opts ...grpc.CallOption) (*GetKeyResponse, error)
 	GetMerkleTree(ctx context.Context, in *MerkleTreeRequest, opts ...grpc.CallOption) (*MerkleTreeResponse, error)
+	GetKeysInRanges(ctx context.Context, in *GetKeysInRangesRequest, opts ...grpc.CallOption) (ReplicationService_GetKeysInRangesClient, error)
 }
 
 type replicationServiceClient struct {
@@ -65,16 +66,49 @@ func (c *replicationServiceClient) GetMerkleTree(ctx context.Context, in *Merkle
 	return out, nil
 }
 
+func (c *replicationServiceClient) GetKeysInRanges(ctx context.Context, in *GetKeysInRangesRequest, opts ...grpc.CallOption) (ReplicationService_GetKeysInRangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ReplicationService_ServiceDesc.Streams[0], "/kvbridge.ReplicationService/GetKeysInRanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &replicationServiceGetKeysInRangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type ReplicationService_GetKeysInRangesClient interface {
+	Recv() (*GetKeysInRangesResponse, error)
+	grpc.ClientStream
+}
+
+type replicationServiceGetKeysInRangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *replicationServiceGetKeysInRangesClient) Recv() (*GetKeysInRangesResponse, error) {
+	m := new(GetKeysInRangesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ReplicationServiceServer is the server API for ReplicationService service.
 // All implementations must embed UnimplementedReplicationServiceServer
 // for forward compatibility
 type ReplicationServiceServer interface {
 	// replicate a single op, ideally it should be a single
-	// function that takes in the op + args the client recieved but for now
+	// function that takes in the op + args the client received but for now
 	// just a simple replicate write function that always replicate
 	ReplicateWrite(context.Context, *ReplicateWriteRequest) (*ReplicateWriteResponse, error)
 	GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error)
 	GetMerkleTree(context.Context, *MerkleTreeRequest) (*MerkleTreeResponse, error)
+	GetKeysInRanges(*GetKeysInRangesRequest, ReplicationService_GetKeysInRangesServer) error
 	mustEmbedUnimplementedReplicationServiceServer()
 }
 
@@ -90,6 +124,9 @@ func (UnimplementedReplicationServiceServer) GetKey(context.Context, *GetKeyRequ
 }
 func (UnimplementedReplicationServiceServer) GetMerkleTree(context.Context, *MerkleTreeRequest) (*MerkleTreeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMerkleTree not implemented")
+}
+func (UnimplementedReplicationServiceServer) GetKeysInRanges(*GetKeysInRangesRequest, ReplicationService_GetKeysInRangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetKeysInRanges not implemented")
 }
 func (UnimplementedReplicationServiceServer) mustEmbedUnimplementedReplicationServiceServer() {}
 
@@ -158,6 +195,27 @@ func _ReplicationService_GetMerkleTree_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReplicationService_GetKeysInRanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetKeysInRangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ReplicationServiceServer).GetKeysInRanges(m, &replicationServiceGetKeysInRangesServer{stream})
+}
+
+type ReplicationService_GetKeysInRangesServer interface {
+	Send(*GetKeysInRangesResponse) error
+	grpc.ServerStream
+}
+
+type replicationServiceGetKeysInRangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *replicationServiceGetKeysInRangesServer) Send(m *GetKeysInRangesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // ReplicationService_ServiceDesc is the grpc.ServiceDesc for ReplicationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -178,6 +236,12 @@ var ReplicationService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ReplicationService_GetMerkleTree_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetKeysInRanges",
+			Handler:       _ReplicationService_GetKeysInRanges_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "proto/replication.proto",
 }

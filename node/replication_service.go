@@ -114,3 +114,71 @@ func (node *KVNode) ShouldUpdate(myVal *ValueType, newVal *ValueType, tieBreaker
 	// update only if my version is lower
 	return (res == -1)
 }
+
+func (m *Messager) GetMerkleTree(ctx context.Context, req *replication.MerkleTreeRequest) (*replication.MerkleTreeResponse, error) {
+	lb := NodeID(req.KeyRangeLowerBound)
+	ub := NodeID(req.KeyRangeUpperBound)
+	nr := NodeRange{StartHash: lb, EndHash: ub}
+	snapshotDB := m.node.Storage.GetSnapshotDB()
+	snapshotIters, err := m.node.Storage.GetSnapshotIters(lb, ub, snapshotDB)
+	if err != nil {
+		return nil, err
+	}
+
+	merkleTree, err := BuildMerkleTree(nr, snapshotIters)
+	if err != nil {
+		return nil, err
+	}
+	for _, ssIter := range snapshotIters {
+		err := ssIter.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = snapshotDB.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	merkleTreeBytes := SerializeMerkleTree(merkleTree)
+
+	resp := replication.MerkleTreeResponse{Data: merkleTreeBytes}
+	return &resp, nil
+}
+
+func (m *Messager) GetKeysInRanges(req *replication.GetKeysInRangesRequest, stream replication.ReplicationService_GetKeysInRangesServer) error {
+	snapshotDB := m.node.Storage.GetSnapshotDB()
+	for _, keyRange := range req.GetKeyRangeList() {
+		lb := keyRange.GetKeyRangeLowerBound()
+		ub := keyRange.GetKeyRangeUpperBound()
+
+		ssIters, err := m.node.Storage.GetSnapshotIters(NodeID(lb), NodeID(ub), snapshotDB)
+		if err != nil {
+			return err
+		}
+
+		for _, iter := range ssIters {
+			iter.First()
+			for iter.Valid() {
+				key := iter.Key()
+				val := iter.Value()
+				resp := replication.GetKeysInRangesResponse{Ok: true, Key: key, Value: val}
+				err := stream.Send(&resp)
+				if err != nil {
+					return err
+				}
+				iter.Next()
+			}
+			err := iter.Close()
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+	err := snapshotDB.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}

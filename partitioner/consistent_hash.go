@@ -3,7 +3,6 @@ package partitioner
 import (
 	"KVBridge/state"
 	. "KVBridge/types"
-	"KVBridge/utils"
 )
 
 type ConsistentHashPartitioner struct {
@@ -12,7 +11,7 @@ type ConsistentHashPartitioner struct {
 
 func (p *ConsistentHashPartitioner) GetPartitions(key []byte) ([]NodeID, error) {
 	//hashGenerator := utils.SHA256HashGenerator{}
-	hashGenerator := utils.Murmur3HashGenerator{}
+	hashGenerator := Murmur3HashGenerator{}
 	keyHash := hashGenerator.GenerateHash(key)
 
 	// Use last few bits of hash (to avoid integer overflows) mod cluster_size to decide which server to use

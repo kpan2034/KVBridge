@@ -2,11 +2,10 @@ package node
 
 import (
 	"KVBridge/proto/compiled/replication"
-	"errors"
-
-	// "sync"
 	. "KVBridge/types"
 	"context"
+	"errors"
+	"io"
 )
 
 var ErrReplicateWriteFailed = errors.New("replicate write failed")
@@ -173,4 +172,52 @@ func (m *Messager) ReconcileKeyValue(key *KeyType, myValue *ValueType) (votedVal
 	// Add returned value to the vote map
 	// We ignore versions when voting
 
+}
+
+func (m *Messager) FetchMerkleTree(nodeID NodeID, lb uint32, ub uint32) (*MerkleTree, error) {
+	merkleTreeReq := replication.MerkleTreeRequest{KeyRangeLowerBound: lb, KeyRangeUpperBound: ub}
+	m.Logger.Debugf("%v", m.client_map)
+	merkleTreeResp, err := m.getClient(nodeID).GetMerkleTree(context.TODO(), &merkleTreeReq)
+
+	if err != nil {
+		return nil, err
+	}
+	tree, err := DeserializeMerkleTree(merkleTreeResp.Data)
+	return tree, err
+}
+
+func (c *Client) RecoverKeyRanges(ctx context.Context, keyRanges []NodeRange, n *KVNode) error {
+
+	protoKeyRanges := make([]*replication.GetKeysInRangesRequest_KeyRange, len(keyRanges))
+	for i, keyRange := range keyRanges {
+		protoKeyRanges[i] = &replication.GetKeysInRangesRequest_KeyRange{
+			KeyRangeLowerBound: uint32(keyRange.StartHash),
+			KeyRangeUpperBound: uint32(keyRange.EndHash),
+		}
+	}
+
+	req := replication.GetKeysInRangesRequest{KeyRangeList: protoKeyRanges}
+	stream, err := c.GetKeysInRanges(ctx, &req)
+	if err != nil {
+		return nil
+	}
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		ok := resp.GetOk()
+		key := resp.GetKey()
+		val := resp.GetValue()
+		if ok {
+			err = n.WriteWithReplicate(key, val, false)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
