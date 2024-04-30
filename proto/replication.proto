@@ -6,12 +6,13 @@ option go_package = "./replication";
 
 service ReplicationService {
   // replicate a single op, ideally it should be a single
-  // function that takes in the op + args the client recieved but for now
+  // function that takes in the op + args the client received but for now
   // just a simple replicate write function that always replicate
   rpc ReplicateWrite(ReplicateWriteRequest) returns (ReplicateWriteResponse);
   rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
 
   rpc GetMerkleTree(MerkleTreeRequest) returns (MerkleTreeResponse);
+  rpc GetKeysInRanges(GetKeysInRangesRequest) returns (stream GetKeysInRangesResponse);
 }
 
 message ReplicateWriteRequest {
@@ -40,3 +41,17 @@ message MerkleTreeRequest {
 }
 
 message MerkleTreeResponse { repeated uint32 data = 1; }
+
+message GetKeysInRangesRequest {
+  message KeyRange {
+    uint32 keyRangeLowerBound = 1;
+    uint32 keyRangeUpperBound = 2;
+  }
+  repeated KeyRange keyRangeList = 1;
+}
+
+message GetKeysInRangesResponse {
+  bool ok = 1;
+  bytes key = 2;
+  bytes value = 3;
+}

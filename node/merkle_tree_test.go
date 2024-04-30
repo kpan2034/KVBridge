@@ -23,6 +23,10 @@ func (it *TestIterator) Key() []byte {
 	return it.TestKeys[it.Idx]
 }
 
+func (it *TestIterator) Value() []byte {
+	return []byte{}
+}
+
 func (it *TestIterator) Next() bool {
 	it.Idx += 1
 	return it.Idx < len(it.TestKeys)

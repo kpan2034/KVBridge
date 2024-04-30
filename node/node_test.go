@@ -210,10 +210,10 @@ func TestMessager_Recover(t *testing.T) {
 	if err != nil {
 		t.Errorf("Recover failed: %s", err)
 	}
-	//if getNumRecords(node1_rec, t) != 2 || getNumRecords(node2, t) != 2 {
-	//	t.Errorf("Node1(Recovered) Records: Expected %d Actual %d \nNode2 Records: Expected %d Actual %d",
-	//		2, getNumRecords(node1_rec, t), 2, getNumRecords(node2, t))
-	//}
+	if getNumRecords(node1_rec, t) != 2 || getNumRecords(node2, t) != 2 {
+		t.Errorf("Node1(Recovered) Records: Expected %d Actual %d \nNode2 Records: Expected %d Actual %d",
+			2, getNumRecords(node1_rec, t), 2, getNumRecords(node2, t))
+	}
 
 	err = os.RemoveAll("./testing")
 	if err != nil {

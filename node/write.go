@@ -7,6 +7,10 @@ import (
 )
 
 func (node *KVNode) Write(key []byte, value []byte) error {
+	return node.WriteWithReplicate(key, value, true)
+}
+
+func (node *KVNode) WriteWithReplicate(key []byte, value []byte, replicate bool) error {
 
 	kt := NewKeyType(key)
 
@@ -35,13 +39,14 @@ func (node *KVNode) Write(key []byte, value []byte) error {
 	}
 	node.Logger.Debugf("wrote (%v:%v) to local storage", kt, vt)
 
-	// replicate write to other node
-	nacks, err := node.ReplicateWrites(kt, vt)
-	if err != nil {
-		// just error out for now, later should just log
-		return err
+	if replicate {
+		// replicate write to other node
+		nacks, err := node.ReplicateWrites(kt, vt)
+		if err != nil {
+			// just error out for now, later should just log
+			return err
+		}
+		node.Logger.Debugf("replicated to %d other nodes", nacks)
 	}
-	node.Logger.Debugf("replicated to %d other nodes", nacks)
-
 	return nil
 }

@@ -3,8 +3,8 @@ package node
 import (
 	"KVBridge/proto/compiled/replication"
 	"KVBridge/types"
+	"io"
 	"log"
-
 	// "sync"
 	. "KVBridge/types"
 	"context"
@@ -121,4 +121,40 @@ func (m *Messager) FetchMerkleTree(nodeID types.NodeID, lb uint32, ub uint32) (*
 	}
 	tree, err := DeserializeMerkleTree(merkleTreeResp.Data)
 	return tree, err
+}
+
+func (c *Client) RecoverKeyRanges(ctx context.Context, keyRanges []types.NodeRange, n *KVNode) error {
+
+	protoKeyRanges := make([]*replication.GetKeysInRangesRequest_KeyRange, len(keyRanges))
+	for i, keyRange := range keyRanges {
+		protoKeyRanges[i] = &replication.GetKeysInRangesRequest_KeyRange{
+			KeyRangeLowerBound: uint32(keyRange.StartHash),
+			KeyRangeUpperBound: uint32(keyRange.EndHash),
+		}
+	}
+
+	req := replication.GetKeysInRangesRequest{KeyRangeList: protoKeyRanges}
+	stream, err := c.GetKeysInRanges(ctx, &req)
+	if err != nil {
+		return nil
+	}
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		ok := resp.GetOk()
+		key := resp.GetKey()
+		val := resp.GetValue()
+		if ok {
+			err = n.WriteWithReplicate(key, val, false)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

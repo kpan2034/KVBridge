@@ -8,6 +8,7 @@ import (
 	"KVBridge/state"
 	"KVBridge/storage"
 	"KVBridge/types"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/tidwall/redcon"
@@ -94,10 +95,12 @@ func (kvNode *KVNode) Recover() error {
 			return err
 		}
 
-		// TODO: Fetch data from S for the problematic keys, needs new RPC
-
-		// TODO: Update D with received data
-
+		if len(diffs) > 0 {
+			err = kvNode.getClient(sourceNode).RecoverKeyRanges(context.TODO(), diffs, kvNode)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	err := snapshotDB.Close()
 	if err != nil {

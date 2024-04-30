@@ -114,6 +114,7 @@ func (pb *PebbleStorageManager) Snapshot(keyLowerBound types.NodeID, keyUpperBou
 type StorageIterator interface {
 	Valid() bool
 	Key() []byte
+	Value() []byte
 	Next() bool
 	First() bool
 	Close() error
