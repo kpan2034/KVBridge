@@ -2,6 +2,9 @@ package node
 
 import (
 	"KVBridge/proto/compiled/replication"
+	"KVBridge/types"
+	"log"
+
 	// "sync"
 	. "KVBridge/types"
 	"context"
@@ -106,4 +109,16 @@ func getMajorityKey(N int, voteMap map[string]int) (string, bool) {
 	}
 
 	return "", false
+}
+
+func (m *Messager) FetchMerkleTree(nodeID types.NodeID, lb uint32, ub uint32) (*MerkleTree, error) {
+	merkleTreeReq := replication.MerkleTreeRequest{KeyRangeLowerBound: lb, KeyRangeUpperBound: ub}
+	log.Printf("%v", m.client_map)
+	merkleTreeResp, err := m.getClient(nodeID).GetMerkleTree(context.TODO(), &merkleTreeReq)
+
+	if err != nil {
+		return nil, err
+	}
+	tree, err := DeserializeMerkleTree(merkleTreeResp.Data)
+	return tree, err
 }

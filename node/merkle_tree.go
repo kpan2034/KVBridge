@@ -20,10 +20,9 @@ type MerkleTree struct {
 func BuildMerkleTree(nr types.NodeRange, iter storage.StorageIterator) (*MerkleTree, error) {
 
 	depth := min(MAX_DEPTH, int(math.Ceil(math.Log2(float64(nr.EndHash-nr.StartHash+1)))))
-	data := make([]uint32, 2*(nr.EndHash-nr.StartHash+1)-1)
+	data := make([]uint32, int(math.Pow(2, float64(depth)+1))-1)
 	iter.First()
 	_ = buildTreeUtil(0, 0, depth, nr.StartHash, nr.EndHash, &data, iter)
-	log.Printf("IN BuildMerkleTree: %v", data)
 	mt := MerkleTree{Depth: depth, RangeLowerBound: uint32(nr.StartHash), RangeUpperBound: uint32(nr.EndHash), Data: data}
 	return &mt, nil
 }

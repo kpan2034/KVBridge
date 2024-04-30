@@ -38,7 +38,7 @@ func (kvNode *KVNode) getRecoverNode(keyrangeLB types.NodeID, keyrangeUB types.N
 	for i := 0; i < kvNode.Environment.State.ReplicationFactor; i++ {
 		candidateNodeIdx := (i + idx) % kvNode.Environment.State.N
 		candidateNodeID := kvNode.Environment.State.ClusterIDs[candidateNodeIdx]
-		if kvNode.Environment.State.IDMap[candidateNodeID].Status == types.StatusUP {
+		if candidateNodeID != kvNode.ID && kvNode.Environment.State.IDMap[candidateNodeID].Status == types.StatusUP {
 			return candidateNodeID, nil
 		}
 	}
@@ -47,45 +47,60 @@ func (kvNode *KVNode) getRecoverNode(keyrangeLB types.NodeID, keyrangeUB types.N
 
 // Recover Synchronizes divergent replicas (could be due to failures)
 // Utilizes Anti-entropy (Merkle trees) for efficiency
-//func (kvNode *KVNode) Recover() error {
-//
-//	if kvNode.Environment.State.ReplicationFactor <= 1 {
-//		kvNode.Environment.Logger.Errorf("Replication Factor is %d, can not recover", kvNode.Environment.State.ReplicationFactor)
-//		return errors.New("Replication Factor <=1, can not recover")
-//	}
-//
-//	// Ranges of data handled by current node
-//	keyRanges := kvNode.Environment.State.KeyRanges
-//
-//	for _, keyrange := range keyRanges {
-//
-//		// Step-1: Identify which node (S) to copy over data from to current node (D)
-//		sourceNode, err := kvNode.getRecoverNode(keyrange.StartHash, keyrange.EndHash)
-//		if err != nil {
-//			return err
-//		}
-//
-//		// Step-2: Take a snapshot of data
-//		snapshotIter, err := kvNode.Storage.GetSnapshotIter(keyrange.StartHash, keyrange.EndHash)
-//		if err != nil {
-//			return err
-//		}
-//
-//		// Step-3: Create merkle tree on S and D for each key range
-//		destMerkleTree, err := BuildMerkleTree(keyrange, snapshotIter)
-//		if err != nil { return err }
-//		//TODO : RPC call for sourceMerkleTree
-//
-//		// Step-4: Streaming communication bw S and D to find keys with discrepancy
-//
-//		// Step-5: Fetch data from S for the problematic keys
-//
-//		// Step-6: Update D with received data
-//
-//	}
-//
-//	return nil
-//}
+func (kvNode *KVNode) Recover() error {
+
+	if kvNode.Environment.State.ReplicationFactor <= 1 {
+		kvNode.Environment.Logger.Errorf("Replication Factor is %d, can not recover", kvNode.Environment.State.ReplicationFactor)
+		return errors.New("Replication Factor <=1, can not recover")
+	}
+
+	// Ranges of data handled by current node
+	keyRanges := kvNode.Environment.State.KeyRanges
+
+	for _, keyrange := range keyRanges {
+
+		// Identify which node (S) to copy over data from to current node (D)
+		sourceNode, err := kvNode.getRecoverNode(keyrange.StartHash, keyrange.EndHash)
+		if err != nil {
+			return err
+		}
+
+		// Take a snapshot of data
+		snapshotIter, err := kvNode.Storage.GetSnapshotIter(keyrange.StartHash, keyrange.EndHash)
+		if err != nil {
+			return err
+		}
+
+		// Create merkle tree on S and D for each key range
+		destMerkleTree, err := BuildMerkleTree(keyrange, snapshotIter)
+		if err != nil {
+			return err
+		}
+		temp := uint32(0)
+		for _, num := range destMerkleTree.Data {
+			temp += num
+		}
+		fmt.Printf("%v", temp)
+
+		srcMerkleTree, err := kvNode.FetchMerkleTree(sourceNode, uint32(keyrange.StartHash), uint32(keyrange.EndHash))
+		if err != nil {
+			return err
+		}
+
+		diffs, err := DiffMerkleTree(srcMerkleTree, destMerkleTree)
+		if err != nil || diffs != nil {
+			return err
+		}
+		// TODO: finish this
+
+		// Fetch data from S for the problematic keys
+
+		// Update D with received data
+
+	}
+
+	return nil
+}
 
 // Kill a node, useful for testing purposes
 func (kvNode *KVNode) Kill() error {

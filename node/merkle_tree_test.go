@@ -55,7 +55,7 @@ func TestDiffMerkleTree(t *testing.T) {
 	iter1 := TestIterator{Idx: 0}
 	iter1.TestKeys = make([][]byte, 3)
 	iter1.TestKeys[0] = []byte{0, 0, 0, 1}
-	iter1.TestKeys[1] = []byte{0, 0, 0, 4}
+	iter1.TestKeys[1] = []byte{0, 0, 0, 2}
 	iter1.TestKeys[2] = []byte{0, 0, 0, 7}
 	nr := types.NodeRange{StartHash: 0, EndHash: 15}
 	destMerkleTree, err := node.BuildMerkleTree(nr, &iter1)

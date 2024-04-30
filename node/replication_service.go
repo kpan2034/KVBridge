@@ -107,3 +107,24 @@ func (node *KVNode) ShouldUpdate(myVal *ValueType, newVal *ValueType, tieBreaker
 	// update only if my version is lower
 	return (res == -1)
 }
+
+func (m *Messager) GetMerkleTree(ctx context.Context, req *replication.MerkleTreeRequest) (*replication.MerkleTreeResponse, error) {
+	lb := NodeID(req.KeyRangeLowerBound)
+	ub := NodeID(req.KeyRangeUpperBound)
+	nr := NodeRange{StartHash: lb, EndHash: ub}
+
+	snapshotIter, err := m.node.Storage.GetSnapshotIter(lb, ub)
+	if err != nil {
+		return nil, err
+	}
+
+	merkleTree, err := BuildMerkleTree(nr, snapshotIter)
+	if err != nil {
+		return nil, err
+	}
+
+	merkleTreeBytes := SerializeMerkleTree(merkleTree)
+
+	resp := replication.MerkleTreeResponse{Data: merkleTreeBytes}
+	return &resp, nil
+}
