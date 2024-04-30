@@ -10,6 +10,7 @@ import (
 )
 
 var ErrReplicateWriteFailed = errors.New("replicate write failed")
+var ErrReconcileReadFailed = errors.New("reconcile read failed")
 var ErrTimeout = errors.New("timeout")
 
 // Initiates ReplicateWriteRequest
@@ -26,7 +27,6 @@ func (m *Messager) ReplicateWrites(key *KeyType, value *ValueType) (nacks int, e
 		m.Logger.Debugf("replicating to node:%v, timeout: %s", id, m.Config.Timeout)
 		go func(id NodeID) {
 			if id == m.ID {
-				m.Logger.Debugf("ignoring self: id:%v", id)
 				acks <- struct{}{}
 				return
 			}
@@ -58,28 +58,28 @@ func (m *Messager) ReplicateWrites(key *KeyType, value *ValueType) (nacks int, e
 	req_acks := m.GetWriteThreshold()
 	num_acks := 0
 	num_errs := 0 // you can calc this using resps and acks btw
-	num_resps := 0
 
 	for {
 		select {
 		case <-acks:
 			num_acks++
-			m.Logger.Debugf("ack on ackChan, num_acks: %d, num_resps: %d", num_acks, num_resps)
+			m.Logger.Debugf("ack on ackChan, num_acks: %d", num_acks)
 			if num_acks >= req_acks {
 				return num_acks, nil
 			}
 
 		case <-errChan:
-			m.Logger.Debugf("err on errChan, num_errs: %d, num_resps: %d", num_errs, num_resps)
-			if num_errs >= req_acks {
+			num_errs++
+			m.Logger.Debugf("err on errChan, num_errs: %d, num_acks: %d", num_errs, num_acks)
+			// if too many errors, then fail
+			if num_errs > (m.N - req_acks) {
 				return num_acks, ErrReplicateWriteFailed
 			}
 
 		case <-ctx.Done():
-			m.Logger.Debugf("context done, responses: %d, acks: %d", num_resps, num_acks)
+			m.Logger.Debugf("context done, errs: %d, acks: %d", num_errs, num_acks)
 			return num_acks, ErrTimeout
 		}
-		num_resps++
 	}
 }
 
@@ -88,66 +88,89 @@ func (m *Messager) ReplicateWrites(key *KeyType, value *ValueType) (nacks int, e
 // If the node calling ReconcileKeyValue does not have a value associated with the provided key
 // then myValue can be nil
 func (m *Messager) ReconcileKeyValue(key *KeyType, myValue *ValueType) (votedValue []byte, err error) {
-	m.Logger.Debugf("getting value of key: %s from all nodes", key)
+	m.Logger.Debugf("reconciling value of key: %s", key)
 
 	// note: for comparision, []byte keys are converted to a string
 	// sigh -- there needs to be a better way of doing this btw
 	voteMap := make(map[string]int)
-	if myValue != nil {
+	if myValue != nil && myValue.Value() != nil {
 		voteMap[string(myValue.Value())] = 1
 	}
 
+	type valWithId struct {
+		vt *ValueType
+		id NodeID
+	}
+	valChan := make(chan valWithId, m.N)
+	errChan := make(chan struct{})
+
+	ctx, cancel := context.WithTimeout(context.TODO(), m.Config.Timeout)
+	defer cancel()
+
 	for _, id := range m.ClusterIDs {
 		if id == m.ID {
+			valChan <- valWithId{myValue, id}
 			continue
 		}
 
-		// Make the request
-		in := &replication.GetKeyRequest{
-			Key: key.Encode(),
-		}
+		go func(id NodeID) {
+			// Make the request
+			in := &replication.GetKeyRequest{
+				Key: key.Encode(),
+			}
 
-		cl := m.getClient(id)
-		resp, err := cl.GetKey(context.TODO(), in)
-		if err != nil {
-			return nil, err
-		}
-		ok := resp.GetOk()
-		value := resp.GetValue()
+			cl := m.getClient(id)
+			resp, err := cl.GetKey(ctx, in)
+			if err != nil {
+				m.Logger.Errorf("error getting value of key from node %v: %v", id, err)
+				errChan <- struct{}{}
+				return
+			}
+			ok := resp.GetOk()
+			value := resp.GetValue()
 
-		// decode value to value type
-		vt, err := DecodeToValueType(value)
-		if err != nil {
-			return nil, err
-		}
-		m.Logger.Debugf("node %v (ok:%v) returned (key: %v, value: %v)", id, ok, key, vt)
-
-		// Add returned value to the vote map
-		// We ignore versions when voting
-		voteMap[string(vt.Value())]++
+			// decode value to value type
+			vt, err := DecodeToValueType(value)
+			if err != nil {
+				m.Logger.Errorf("error decoding value of key from node %v: %v", id, err)
+				errChan <- struct{}{}
+				return
+			}
+			m.Logger.Debugf("node %v (ok:%v) returned (key: %v, value: %v)", id, ok, key, vt)
+			valChan <- valWithId{vt, id}
+		}(id)
 	}
 
-	// Extract majority value from the map and return
-	value, hasMajority := getMajorityKey(m.N, voteMap)
-	m.Logger.Debugf("majority?: %s; value: %v voteMap: %#v", hasMajority, value, voteMap)
-	if !hasMajority {
-		return nil, nil
-	}
+	req_acks := m.GetReadThreshold()
+	num_acks := 0
+	num_errs := 0 // you can calc this using resps and acks btw
 
-	// TODO: if majority value is different from myValue, start a background routine to write the new value
-
-	m.Logger.Debugf("returning: %s", value)
-	return []byte(value), nil
-}
-
-// ideally you write this as a generic but ok
-func getMajorityKey(N int, voteMap map[string]int) (string, bool) {
-	theta := N/2 + 1
-	for k, v := range voteMap {
-		if v >= theta {
-			return k, true
+	var valueToReturn ValueType
+	for {
+		select {
+		case val := <-valChan:
+			num_acks++
+			m.Logger.Debugf("got ack: val to return: %#v, val:%#v, num_acks: %d", &valueToReturn, val.vt, num_acks)
+			if m.node.ShouldUpdate(&valueToReturn, val.vt, val.id) {
+				m.Logger.Debugf("updating val to return")
+				valueToReturn = *val.vt
+			}
+			if num_acks >= req_acks {
+				return valueToReturn.Value(), nil
+			}
+		case <-errChan:
+			num_errs++
+			// if too many errors, then fail
+			if num_errs > (m.N - req_acks) {
+				return nil, ErrReconcileReadFailed
+			}
+		case <-ctx.Done():
+			m.Logger.Debugf("context done, errs: %d, acks: %d", num_errs, num_acks)
+			return nil, ErrTimeout
 		}
 	}
 
-	return "", false
+	// Add returned value to the vote map
+	// We ignore versions when voting
+
 }

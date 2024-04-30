@@ -31,3 +31,10 @@ var opPrefLookup = map[OpPreferenceString]OpPreference{
 	OpMajorityStr: OpMajority,
 	OpAllStr:      OpAll,
 }
+
+func MaxInt(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
