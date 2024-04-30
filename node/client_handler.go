@@ -111,13 +111,13 @@ func (node *KVNode) setHandler(conn redcon.Conn, cmd redcon.Command) {
 		conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
 		return
 	}
-	// TODO: PREPEND KEY WITH HASH
 	key := cmd.Args[1]
 	value := cmd.Args[2]
 
 	err := node.Write(key, value)
 	if err != nil {
 		conn.WriteError(fmt.Sprintf("ERR could not set (%s = %s): %v", string(key), string(value), err))
+		return
 	}
 	conn.WriteString("OK")
 }

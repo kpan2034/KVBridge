@@ -1,9 +1,12 @@
 package config
 
 import (
+	. "KVBridge/types"
+	"KVBridge/utils"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 	flag "github.com/spf13/pflag"
@@ -12,6 +15,10 @@ import (
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/posflag"
+)
+
+const (
+	defaultTimeoutMs = 1000 * time.Millisecond
 )
 
 // Wraps configuration of a KVNode
@@ -28,6 +35,16 @@ type Config struct {
 	BootstrapServers []string `koanf:"bootstrap_servers"`
 	// number of nodes each data point is replicated to
 	ReplicationFactor int `koanf:"replication_factor"`
+	// Read preference -- decided when the node boots
+	ReadPreference OpPreference `koanf:"read_pref"`
+	// Write preference -- decided when the node boots
+	WritePreference OpPreference `koanf:"write_pref"`
+	// How long to wait during request
+	Timeout time.Duration `koanf:"timeout"`
+
+	// For internal use
+	readThreshold  int
+	writeThreshold int
 }
 
 func DefaultConfig() *Config {
@@ -38,6 +55,11 @@ func DefaultConfig() *Config {
 		DataPath:          "./tmp/storage",
 		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
 		ReplicationFactor: 3,
+		ReadPreference:    OpMajority,
+		WritePreference:   OpMajority,
+		Timeout:           defaultTimeoutMs,
+		readThreshold:     2,
+		writeThreshold:    2,
 	}
 }
 
@@ -60,6 +82,9 @@ func NewConfigFromEnv() *Config {
 	f.String("data_path", "./tmp/storage", "path to persistent storage")
 	f.String("bootstrap_servers", "localhost:50051,localhost:50052", "bootstrap servers in the cluster")
 	f.Int("replication_factor", 3, "number of nodes to replicate each data point")
+	f.String("read_pref", "majority", "read preference for cluster")
+	f.String("write_pref", "majority", "write preference for cluster")
+	f.Int64("timeout", 10000000000, "default timeout between nodes in ns")
 	f.Parse(os.Args[1:])
 
 	// Load the config files provided in the commandline.
@@ -69,6 +94,7 @@ func NewConfigFromEnv() *Config {
 			log.Fatalf("could not load config file: %v", err)
 		}
 	}
+
 	// Overwrite values in config file with ones provided on the command line
 	if err := k.Load(posflag.Provider(f, ".", k), nil); err != nil {
 		log.Fatalf("could not read command-line arguments: %v", err)
@@ -77,6 +103,7 @@ func NewConfigFromEnv() *Config {
 	config := &Config{}
 	decodeHook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToSliceHookFunc(","),
+		utils.OpStrToPrefHookFunc(),
 	)
 	unmarshalConf := koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
@@ -89,5 +116,49 @@ func NewConfigFromEnv() *Config {
 		log.Fatalf("could not unmarshall config: %v", err)
 	}
 
+	config.setReadThreshold()
+	config.setWriteThreshold()
+
 	return config
+}
+
+func (config *Config) GetReadThreshold() int {
+	return config.readThreshold
+}
+
+func (config *Config) GetWriteThreshold() int {
+	return config.writeThreshold
+}
+
+func (config *Config) setReadThreshold() {
+	threshold := 0
+	N := len(config.BootstrapServers)
+	// There is a more optimal way of doing this -- but using bit manips are out of the purview of our deadline
+	switch config.ReadPreference {
+	case OpLocal:
+		threshold = 1
+	case OpMajority:
+		threshold = (N / 2) + 1
+	case OpAll:
+		threshold = N
+	default:
+		log.Fatalf("invalid read preference specified: %v", config.ReadPreference)
+	}
+	config.readThreshold = threshold
+}
+
+func (config *Config) setWriteThreshold() {
+	threshold := 0
+	N := len(config.BootstrapServers)
+	switch config.WritePreference {
+	case OpLocal:
+		threshold = 1
+	case OpMajority:
+		threshold = (N / 2) + 1
+	case OpAll:
+		threshold = N
+	default:
+		log.Fatalf("invalid write preference specified: %v", config.ReadPreference)
+	}
+	config.writeThreshold = threshold
 }

@@ -28,10 +28,10 @@ func (node *KVNode) Read(key []byte) ([]byte, error) {
 	}
 
 	// extract the actual value from majorityValue
-	majorityValue, err := DecodeToValueType(val)
-	if err != nil {
-		return nil, err
-	}
+	// majorityValue, err := DecodeToValueType(val)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	return majorityValue.Value(), nil
+	return val, nil
 }

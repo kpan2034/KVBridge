@@ -33,7 +33,7 @@ func (node *KVNode) WriteWithReplicate(key []byte, value []byte, replicate bool)
 	vt.Tick()
 
 	// store new version + value
-	err = node.Storage.Set(kt.Encode(), vt.Value())
+	err = node.Storage.Set(kt.Encode(), vt.Encode())
 	if err != nil {
 		return err
 	}

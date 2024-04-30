@@ -31,3 +31,19 @@ const (
 	StatusUP StatusType = iota
 	StatusDOWN
 )
+
+type OpPreference int
+
+const (
+	OpLocal OpPreference = iota
+	OpMajority
+	OpAll
+)
+
+type OpPreferenceString string
+
+const (
+	OpLocalStr    OpPreferenceString = "local"
+	OpMajorityStr                    = "majority"
+	OpAllStr                         = "all"
+)

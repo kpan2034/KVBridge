@@ -11,55 +11,56 @@ import (
 func (m *Messager) ReplicateWrite(ctx context.Context, in *replication.ReplicateWriteRequest) (*replication.ReplicateWriteResponse, error) {
 	m.Logger.Debugf("received replicatewrite request: %v", in)
 
-	inKey := in.GetKey()
-	inVal := in.GetValue()
+	key := in.GetKey()
+	val := in.GetValue()
 	incomingID := NodeID(in.GetId())
 
-	// decode incoming key to a KeyType
-	key, err := DecodeToKeyType(inKey)
-	if err != nil {
-		return nil, err
-	}
+	// decode incoming kt to a KeyType
+	// kt, err := DecodeToKeyType(key)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// decode incoming value to a ValueType
-	incomingValue, err := DecodeToValueType(inVal)
+	incomingVt, err := DecodeToValueType(val)
 	if err != nil {
 		return nil, err
 	}
 
-	myValue, err := m.node.Storage.Get(key.Key())
+	shouldUpdate := true
+	myValue, err := m.node.Storage.Get(key)
 	if err == storage.ErrNotFound {
+		m.Logger.Debugf("key not found: %v", key)
 		err = nil
+		shouldUpdate = true
 	}
 	if err != nil {
-		// m.Logger.Errorf("could not key: (key:%v, value:%v): %v", key, myValue, err)
+		m.Logger.Errorf("could not key: (key:%v, value:%v): %v", key, myValue, err)
 		return nil, err
 	}
 
-	// convert my value to a ValueType
-	myValueDecoded, err := DecodeToValueType(myValue)
+	// otherwise, you got a valid value, so compare to new value
+	// convert my value to a ValueType, if value found
+	myValueVt, err := DecodeToValueType(myValue)
 	if err != nil {
 		return nil, err
 	}
-
-	shouldUpdate := m.node.ShouldUpdate(myValueDecoded, incomingValue, incomingID)
+	shouldUpdate = m.node.ShouldUpdate(myValueVt, incomingVt, incomingID)
 
 	if !shouldUpdate {
-		// Ideally we should tell them that their version is outdated
-		// But we just return false
-		// If they want a new version they can request for it later
+		// Respond with our version
 		return &replication.ReplicateWriteResponse{
-			Ok: false,
+			Resp: &replication.ReplicateWriteResponse_Value{Value: myValue},
 		}, nil
 	}
 
-	err = m.node.Storage.Set(key.Encode(), incomingValue.Encode())
+	err = m.node.Storage.Set(key, val)
 	if err != nil {
-		m.Logger.Errorf("could not replicate: (key:%v, value:%v): %v", key, incomingValue, err)
+		m.Logger.Errorf("could not replicate: (key:%v, value:%v): %v", key, val, err)
 	}
 
 	return &replication.ReplicateWriteResponse{
-		Ok: true,
+		Resp: &replication.ReplicateWriteResponse_Ok{Ok: true},
 	}, nil
 }
 
@@ -72,8 +73,9 @@ func (m *Messager) GetKey(ctx context.Context, in *replication.GetKeyRequest) (*
 		return nil, err
 	}
 
-	value, err := m.node.Storage.Get(key.Key())
+	value, err := m.node.Storage.Get(inKey)
 	if errors.Is(err, storage.ErrNotFound) {
+		m.Logger.Debugf("not found: key: %v, returning false to requestor", key)
 		resp := &replication.GetKeyResponse{
 			Ok:    false,
 			Value: nil,
@@ -81,9 +83,11 @@ func (m *Messager) GetKey(ctx context.Context, in *replication.GetKeyRequest) (*
 		return resp, nil
 	}
 	if err != nil {
+		m.Logger.Errorf("error getting key %v", inKey)
 		return nil, err
 	}
 
+	m.Logger.Debugf("found key: %v value: %v, returning true to requestor", inKey, value)
 	resp := &replication.GetKeyResponse{
 		Ok:    true,
 		Value: value,
@@ -92,15 +96,18 @@ func (m *Messager) GetKey(ctx context.Context, in *replication.GetKeyRequest) (*
 }
 
 func (node *KVNode) ShouldUpdate(myVal *ValueType, newVal *ValueType, tieBreaker NodeID) bool {
-	if newVal == nil {
+	node.Logger.Debugf("checking if should update: mine: %#v, theirs: %#v, tie: %v", myVal, newVal, tieBreaker)
+	if newVal == nil || newVal.Value() == nil {
 		return false
 	}
-	if myVal == nil {
+	if myVal == nil || myVal.Value() == nil {
 		return true
 	}
 	res := CompareTimestamps(myVal.Version(), newVal.Version())
+	node.Logger.Debugf("timestamps compared, res: %d", res)
 	if res == 0 {
 		// update only if other node has higher id
+		node.Logger.Debugf("same timestamp, comparing node ids: %s", node.ID <= tieBreaker)
 		return node.ID <= tieBreaker
 	}
 
