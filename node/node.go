@@ -66,7 +66,7 @@ func (kvNode *KVNode) Recover() error {
 		}
 
 		// Take a snapshot of data
-		snapshotIters, err := kvNode.Storage.GetSnapshotIter(keyrange.StartHash, keyrange.EndHash)
+		snapshotIters, err := kvNode.Storage.GetSnapshotIters(keyrange.StartHash, keyrange.EndHash)
 		if err != nil {
 			return err
 		}

@@ -18,46 +18,43 @@ type MerkleTree struct {
 
 func BuildMerkleTree(nr types.NodeRange, iters []storage.StorageIterator) (*MerkleTree, error) {
 
-	depth := min(MAX_DEPTH, int(math.Ceil(math.Log2(float64(nr.EndHash-nr.StartHash)))))
+	//depth := min(MAX_DEPTH, int(math.Ceil(math.Log2(float64(nr.EndHash-nr.StartHash)))))
+	depth := MAX_DEPTH
 	data := make([]uint32, int(math.Pow(2, float64(depth)+1))-1)
-	if len(iters) == 1 {
-		iter := iters[0]
+	for _, iter := range iters {
 		iter.First()
-		_ = buildTreeUtil(0, 0, depth, nr.StartHash, nr.EndHash, &data, iter)
-	} else if len(iters) == 2 {
-		iters[0].First()
-		_ = buildTreeUtil(0, 0, depth, 0, nr.EndHash, &data, iters[0])
-		iters[1].First()
-		_ = buildTreeUtil(0, 0, depth, nr.StartHash, math.MaxUint32, &data, iters[1])
-	} else {
-		log.Fatalf("Length of iters is expected to be 1 or 2, received %d", len(iters))
+		_ = buildTreeUtil(0, 0, math.MaxUint32, &data, iter)
 	}
 
 	mt := MerkleTree{Depth: depth, RangeLowerBound: uint32(nr.StartHash), RangeUpperBound: uint32(nr.EndHash), Data: data}
 	return &mt, nil
 }
 
-func buildTreeUtil(loc int, currDepth int, maxDepth int, lb types.NodeID, ub types.NodeID, data *[]uint32, iter storage.StorageIterator) uint32 {
-	if currDepth == maxDepth {
+func buildTreeUtil(loc int, lb types.NodeID, ub types.NodeID, data *[]uint32, iter storage.StorageIterator) uint32 {
+	if ub < lb {
+		log.Fatalf("buildTreeUtil expects ub>=lb")
+	}
+	if loc >= len(*data)/2 {
 		// Leaf nodes
 		acc := (*data)[loc]
 		exit := false
 		for iter.Valid() && !exit {
 			keytype, _ := types.DecodeToKeyType(iter.Key())
-			if keytype.Hash() > uint32(ub) {
+			h := keytype.Hash()
+			if h > uint32(ub) {
 				exit = true
-			} else if keytype.Hash() <= uint32(ub) && keytype.Hash() >= uint32(lb) {
-				acc = acc ^ keytype.Hash()
+			} else if h <= uint32(ub) && h >= uint32(lb) {
+				acc = acc ^ h
 				iter.Next()
 			} else {
-				iter.Next()
+				log.Fatalf("buildTreeUtil hit unexpected else branch")
 			}
 		}
 		(*data)[loc] = acc
 	} else {
 		midPoint := lb + (ub-lb)/2
-		leftChildHash := buildTreeUtil(2*loc+1, currDepth+1, maxDepth, lb, midPoint, data, iter)
-		rightChildHash := buildTreeUtil(2*loc+2, currDepth+1, maxDepth, midPoint+1, ub, data, iter)
+		leftChildHash := buildTreeUtil(2*loc+1, lb, midPoint, data, iter)
+		rightChildHash := buildTreeUtil(2*loc+2, midPoint+1, ub, data, iter)
 		(*data)[loc] = leftChildHash ^ rightChildHash
 	}
 	return (*data)[loc]
@@ -90,7 +87,7 @@ func diffUtil(loc int, lb uint32, ub uint32, s *MerkleTree, d *MerkleTree) []typ
 	if loc >= len(s.Data) || s.Data[loc] == d.Data[loc] {
 		return []types.NodeRange{}
 	} else {
-		if loc >= int(math.Pow(2, float64(s.Depth))-1) {
+		if loc >= len(s.Data)/2 {
 			// leaf nodes
 			nr := types.NodeRange{
 				StartHash: types.NodeID(lb),

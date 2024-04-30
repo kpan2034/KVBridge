@@ -6,7 +6,6 @@ import (
 	"KVBridge/proto/compiled/startup"
 	. "KVBridge/types"
 	"context"
-	"encoding/binary"
 	"math"
 	"os"
 	"testing"
@@ -197,38 +196,15 @@ func TestMessager_Recover(t *testing.T) {
 	if err != nil {
 		t.Errorf("TestMessager_Recover failed %s", err)
 	}
-
-	//nr := NodeRange{StartHash: 0, EndHash: math.MaxUint32}
-	//merkleTree, err := node.BuildMerkleTree(nr, iter)
-	//if err != nil {
-	//	t.Errorf("node1 creation failed: %v", err)
-	//}
-	//fmt.Printf("$ %v $", merkleTree.Data[0])
+	if getNumRecords(node1, t) != 1 || getNumRecords(node2, t) != 1 {
+		t.Errorf("Node1 Records: Expected %d Actual %d \nNode2 Records: Expected %d Actual %d",
+			1, getNumRecords(node1, t), 1, getNumRecords(node2, t))
+	}
 
 	cancelFunc1()
 	err = node2.Write([]byte("testKey2"), []byte("testVal2"))
 	if err != nil {
 		t.Errorf("TestMessager_Recover failed %s", err)
-	}
-
-	iters, err := node2.Storage.GetSnapshotIter(0, math.MaxUint32)
-	if err != nil {
-		t.Errorf("TestMessager_Recover failed %s", err)
-	}
-	iter := iters[0]
-	iter.First()
-	count := 0
-	lol_node2 := []string{}
-	lol_node2_hash := []uint32{}
-	for iter.Valid() {
-		count += 1
-		lol_node2 = append(lol_node2, string(iter.Key()))
-		hash := binary.BigEndian.Uint32(iter.Key()[:4])
-		lol_node2_hash = append(lol_node2_hash, hash)
-		iter.Next()
-	}
-	if count != 2 {
-		t.Errorf("Node 2 KeyCount : Expected %d Actual %d", 1, count)
 	}
 
 	c1 := &config.Config{
@@ -239,27 +215,8 @@ func TestMessager_Recover(t *testing.T) {
 		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
 		ReplicationFactor: 3,
 	}
-	lol_node1 := []string{}
-	//node1_rec, node1RecCancelFunc, err := node.NewKVNode(c1)
 	node1_rec, node1RecCancelFunc, err := node.NewKVNode(c1)
-	iters, err = node1_rec.Storage.GetSnapshotIter(0, math.MaxUint32)
-	if err != nil {
-		t.Errorf("TestMessager_Recover failed %s", err)
-	}
-	iter = iters[0]
-	iter.First()
-	count = 0
-	for iter.Valid() {
-		count += 1
-		lol_node1 = append(lol_node1, string(iter.Key()))
-		iter.Next()
-	}
-	if count != 1 {
-		t.Errorf("node1_rec KeyCount : Expected %d Actual %d", 1, count)
-	}
-	if err != nil {
-		t.Errorf("node1 creation failed: %v", err)
-	}
+
 	go func() {
 		err := node1_rec.Start()
 		if err != nil {
@@ -270,10 +227,18 @@ func TestMessager_Recover(t *testing.T) {
 	// Wait for servers to come up
 	time.Sleep(1000 * time.Millisecond)
 
-	err = node1_rec.Recover()
+	if getNumRecords(node1_rec, t) != 1 || getNumRecords(node2, t) != 2 {
+		t.Errorf("Node1 (Before Recover) Records: Expected %d Actual %d \nNode2 Records: Expected %d Actual %d",
+			1, getNumRecords(node1_rec, t), 2, getNumRecords(node2, t))
+	}
 
+	err = node1_rec.Recover()
 	if err != nil {
 		t.Errorf("Recover failed: %s", err)
+	}
+	if getNumRecords(node1_rec, t) != 2 || getNumRecords(node2, t) != 2 {
+		t.Errorf("Node1(Recovered) Records: Expected %d Actual %d \nNode2 Records: Expected %d Actual %d",
+			2, getNumRecords(node1_rec, t), 2, getNumRecords(node2, t))
 	}
 
 	err = os.RemoveAll("./testing")
@@ -283,4 +248,21 @@ func TestMessager_Recover(t *testing.T) {
 	node1RecCancelFunc()
 	cancelFunc2()
 	cancelFunc3()
+}
+
+func getNumRecords(node *node.KVNode, t *testing.T) int {
+	iters, err := node.Storage.GetSnapshotIters(0, math.MaxUint32)
+	if err != nil {
+		t.Errorf("getNumRecord failed %s", err)
+	}
+
+	count := 0
+	for _, iter := range iters {
+		iter.First()
+		for iter.Valid() {
+			count += 1
+			iter.Next()
+		}
+	}
+	return count
 }

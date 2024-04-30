@@ -15,7 +15,7 @@ type StorageEngine interface {
 	Get(key []byte) ([]byte, error)
 	Close() error
 	Snapshot(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([][]byte, [][]byte, error)
-	GetSnapshotIter(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([]StorageIterator, error) // TODO: Decouple from pebble iterator
+	GetSnapshotIters(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([]StorageIterator, error)
 }
 
 type PebbleStorageManager struct {
@@ -118,7 +118,7 @@ type StorageIterator interface {
 	Close() error
 }
 
-func (pb *PebbleStorageManager) GetSnapshotIter(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([]StorageIterator, error) {
+func (pb *PebbleStorageManager) GetSnapshotIters(keyLowerBound types.NodeID, keyUpperBound types.NodeID) ([]StorageIterator, error) {
 	snapshotDB := pb.db.NewSnapshot()
 	if keyLowerBound <= keyUpperBound {
 		iterOptions := pebble.IterOptions{
