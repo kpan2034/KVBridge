@@ -29,7 +29,8 @@ type NodeInfo struct {
 
 // GetInitialState Returns a new State struct with initial values
 func GetInitialState(conf *config.Config) *State {
-	id, _ := getNodeIds([]string{conf.Grpc_address}) // length of this array will always be 1
+	// length of this array will always be 1
+	id, _ := getNodeIds([]string{conf.Grpc_address})
 	currNodeId := id[0]
 	ids, idMap := getNodeIds(conf.BootstrapServers)
 	N := len(conf.BootstrapServers)
@@ -63,7 +64,7 @@ func getNodeIds(serverAddresses []string) ([]NodeID, map[NodeID]*NodeInfo) {
 	output := make([]NodeID, len(serverAddresses))
 	idMap := make(map[NodeID]*NodeInfo)
 	for i, addr := range serverAddresses {
-		hash := hashGenerator.GenerateHash([]byte(addr))
+		hash := hashGenerator.GenerateHash([]byte{addr[len(addr)-1]})
 		output[i] = hash
 
 		// Add server address to map of node info

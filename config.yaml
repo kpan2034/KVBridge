@@ -2,7 +2,7 @@ address: ":6379"
 grpc_address: "localhost:50051"
 log_path: "./tmp/log"
 data_path: "./tmp/storage"
-bootstrap_servers: ["localhost:50051", "localhost:50052", "localhost:50053"]
+bootstrap_servers: ["localhost:50151", "localhost:50152", "localhost:50153"]
 write_pref: "local"
 read_pref: "local"
 timeout: 1000000000
