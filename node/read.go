@@ -8,6 +8,15 @@ import (
 
 func (node *KVNode) Read(key []byte) ([]byte, error) {
 	kt := NewKeyType(key)
+
+	isOwner := node.ownsKey(kt.Hash())
+
+	// forward request to some owneer
+	if !isOwner {
+		return nil, errors.New("not the owner")
+		// return forwardRead
+	}
+
 	value, err := node.Storage.Get(kt.Encode())
 	// if it's a not found error, we can still go get the key from other nodes
 	if errors.Is(err, storage.ErrNotFound) {

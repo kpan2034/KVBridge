@@ -1,6 +1,8 @@
 package types
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 // what kind of node is this?
 type NodeType int
@@ -48,8 +50,7 @@ const (
 	OpAllStr                         = "all"
 )
 
-func (nr *NodeRange) InRange(hashedKey NodeID) bool {
-	return true
-	// return (nr.StartHash <= hashedKey && hashedKey <= nr.EndHash) ||
-	// 	(hashedKey <= nr.StartHash && nr.EndHash <= hashedKey)
+func (nr NodeRange) InRange(hashedKey uint32) bool {
+	return (uint32(nr.StartHash) <= hashedKey && hashedKey <= uint32(nr.EndHash)) ||
+		(hashedKey <= uint32(nr.StartHash) || uint32(nr.EndHash) <= hashedKey)
 }

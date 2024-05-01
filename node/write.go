@@ -61,8 +61,8 @@ func (node *KVNode) WriteWithReplicate(key []byte, value []byte, replicate bool)
 
 func (node *KVNode) ownsKey(hash uint32) bool {
 
-	for _, r := range node.KeyRanges {
-		if r.InRange(NodeID(hash)) {
+	for _, r := range node.State.KeyRanges {
+		if r.InRange(hash) {
 			return true
 		}
 	}
