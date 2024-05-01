@@ -18,10 +18,14 @@ make build
 ./kvbridge --conf config2.yaml &
 ./kvbridge --conf config3.yaml &
 
-sleep 1
+sleep 5
 
 # run benchmark
-redis-benchmark -t set,get -n 1000 -q -c 4 # --csv
+redis-benchmark -t set -n 1000 -q -c 4 --csv
+#
+sleep 2
+#
+redis-benchmark -t get -n 1000 -q -c 4 --csv
 
 # terminate nodes
 redis-cli -p 6379 -n 0 close

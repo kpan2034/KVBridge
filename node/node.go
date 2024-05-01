@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	stdlog "log"
 	"os"
 	"sync"
 
@@ -134,6 +135,7 @@ func NewKVNode(config *config.Config) (*KVNode, func(), error) {
 	// Initialize logger
 	logPath := config.LogPath
 	logger := log.NewZapLogger(logPath, log.DebugLogLevel).Named(fmt.Sprintf("node@%v", config.Address))
+	// logger := log.NewZapLogger(logPath, log.ErrorLogLevel).Named(fmt.Sprintf("node@%v", config.Address))
 	init_state := state.GetInitialState(config)
 
 	// Wrap all dependencies in an env
@@ -184,6 +186,8 @@ func NewKVNode(config *config.Config) (*KVNode, func(), error) {
 
 			// Print final stats on close
 			node.Logger.Infof("%s", node.Stats)
+			// also print on stdout
+			stdlog.Printf("\n%s\n", node.Stats)
 		})
 
 	node.closeFunc = closeFunc
