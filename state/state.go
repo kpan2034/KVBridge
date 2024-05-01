@@ -3,7 +3,11 @@ package state
 import (
 	"KVBridge/config"
 	. "KVBridge/types"
+	"fmt"
+	"log"
 	"sort"
+	"sync/atomic"
+	"time"
 )
 
 type State struct {
@@ -19,6 +23,76 @@ type State struct {
 	N                 int
 	ReplicationFactor int
 	KeyRanges         []NodeRange
+	*Stats
+}
+
+type Stats struct {
+	NumReads     atomic.Uint64
+	NumWrites    atomic.Uint64
+	ErrReads     atomic.Uint64
+	ErrWrites    atomic.Uint64
+	NumReplicate atomic.Uint64
+	NumOutdated  atomic.Uint64
+	TotalDelay   atomic.Uint64
+}
+
+func (s *Stats) CountRead() {
+	s.NumReads.Add(1)
+}
+
+func (s *Stats) CountWrite() {
+	s.NumWrites.Add(1)
+}
+
+func (s *Stats) CountErrRead() {
+	s.ErrReads.Add(1)
+}
+
+func (s *Stats) CountErrWrite() {
+	s.ErrWrites.Add(1)
+}
+
+func (s *Stats) CountReplicate() {
+	s.NumReplicate.Add(1)
+}
+
+func (s *Stats) CountInconsistent() {
+	s.NumOutdated.Add(1)
+}
+
+func (s *Stats) AddDelay(d uint64) {
+	s.TotalDelay.Add(d)
+}
+
+func (s *Stats) MeasureDelay(vt ValueType) {
+	diff := NewTimestamp().Uint64() - vt.Version().Uint64()
+	if diff >= 0 {
+		s.AddDelay(diff)
+		s.CountReplicate()
+	}
+}
+
+func (s *Stats) PrintStatHelper() {
+	ticker := time.NewTicker(5 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			log.Printf("%s", s)
+		}
+	}
+}
+
+func (s *Stats) String() string {
+	d := time.Duration(s.TotalDelay.Load() / s.NumReplicate.Load())
+	str := fmt.Sprintf("reads:%d\terr_reads:%d\twrites:%d\terr_writes:%d\taverage_delay:%dms\treplicate_requests:%d",
+		s.NumReads.Load(),
+		s.ErrReads.Load(),
+		s.NumWrites.Load(),
+		s.ErrWrites.Load(),
+		d.Milliseconds(),
+		s.NumReplicate.Load())
+
+	return str
 }
 
 type NodeInfo struct {
@@ -47,6 +121,9 @@ func GetInitialState(conf *config.Config) *State {
 		keyRanges[i] = NodeRange{StartHash: startRange, EndHash: endRange}
 	}
 
+	stats := &Stats{}
+	stats.NumReplicate.Store(1)
+
 	return &State{
 		NodeType:          NodeSecondary,
 		ID:                currNodeId,
@@ -55,6 +132,7 @@ func GetInitialState(conf *config.Config) *State {
 		N:                 N,
 		ReplicationFactor: conf.ReplicationFactor,
 		KeyRanges:         keyRanges,
+		Stats:             stats,
 	}
 }
 

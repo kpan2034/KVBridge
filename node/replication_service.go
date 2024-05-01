@@ -27,12 +27,15 @@ func (m *Messager) ReplicateWrite(ctx context.Context, in *replication.Replicate
 		return nil, err
 	}
 
-	shouldUpdate := true
+	// measure delay here
+	m.node.State.MeasureDelay(*incomingVt)
+
+	// shouldUpdate := true
 	myValue, err := m.node.Storage.Get(key)
 	if err == storage.ErrNotFound {
 		m.Logger.Debugf("key not found: %v", key)
 		err = nil
-		shouldUpdate = true
+		// shouldUpdate = true
 	}
 	if err != nil {
 		m.Logger.Errorf("could not key: (key:%v, value:%v): %v", key, myValue, err)
@@ -45,7 +48,7 @@ func (m *Messager) ReplicateWrite(ctx context.Context, in *replication.Replicate
 	if err != nil {
 		return nil, err
 	}
-	shouldUpdate = m.node.ShouldUpdate(myValueVt, incomingVt, incomingID)
+	shouldUpdate := m.node.ShouldUpdate(myValueVt, incomingVt, incomingID)
 
 	if !shouldUpdate {
 		// Respond with our version

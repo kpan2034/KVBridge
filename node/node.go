@@ -11,8 +11,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tidwall/redcon"
 	"os"
+	"sync"
+
+	"github.com/tidwall/redcon"
 )
 
 // The main struct that represents a node in a KVBridge cluster
@@ -28,6 +30,9 @@ type KVNode struct {
 
 	// other important stuff
 	client_server *redcon.Server
+
+	//
+	closeFunc func()
 }
 
 func (kvNode *KVNode) getRecoverNode(keyrangeLB types.NodeID, keyrangeUB types.NodeID) (types.NodeID, error) {
@@ -161,20 +166,33 @@ func NewKVNode(config *config.Config) (*KVNode, func(), error) {
 	srv := node.getNewClientServer()
 	node.client_server = srv
 	// Aggregate all close functions here and return
-	closeFunc = func() {
-		messager.Close()
+	closeFunc = sync.OnceFunc(
+		func() {
+			messager.Close()
 
-		err := storage.Close()
-		if err != nil {
-			node.Logger.Errorf("error closing storage: %v", err)
-		}
+			err := storage.Close()
+			if err != nil {
+				node.Logger.Errorf("error closing storage: %v", err)
+			}
 
-		err = srv.Close()
-		node.Logger.Debugf("closing client handling server: %s", srv.Addr())
-		if err != nil {
-			node.Logger.Errorf("error closing client server: %v", err)
-		}
-	}
+			err = srv.Close()
+			node.Logger.Debugf("closing client handling server: %s", srv.Addr())
+			if err != nil {
+				node.Logger.Errorf("error closing client server: %v", err)
+			}
+
+			// Print final stats on close
+			node.Logger.Infof("%s", node.Stats)
+		})
+
+	node.closeFunc = closeFunc
 
 	return node, closeFunc, nil
+}
+
+func (node *KVNode) Close() {
+	if node.closeFunc == nil {
+		panic("close function not registered.")
+	}
+	node.closeFunc()
 }

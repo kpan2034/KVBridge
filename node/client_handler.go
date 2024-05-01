@@ -22,6 +22,7 @@ func (node *KVNode) getNewClientServer() *redcon.Server {
 	mux.HandleFunc("publish", node.commonHandler)
 	mux.HandleFunc("subscribe", node.commonHandler)
 	mux.HandleFunc("psubscribe", node.commonHandler)
+	mux.HandleFunc("close", node.closeHanlder)
 
 	srv := redcon.NewServer(addr,
 		func(conn redcon.Conn, cmd redcon.Command) {
@@ -100,6 +101,9 @@ func (node *KVNode) Start() error {
 	// TODO(kpan): add sync primitives and graceful closing of servers
 	go node.Messager.Start()
 
+	// Initialize stat counter
+	// go node.State.PrintStatHelper()
+
 	// Initalize listener
 	node.Logger.Debugf("starting server at %s", addr)
 
@@ -113,9 +117,11 @@ func (node *KVNode) setHandler(conn redcon.Conn, cmd redcon.Command) {
 	}
 	key := cmd.Args[1]
 	value := cmd.Args[2]
+	go node.CountWrite()
 
 	err := node.Write(key, value)
 	if err != nil {
+		go node.CountErrWrite()
 		conn.WriteError(fmt.Sprintf("ERR could not set (%s = %s): %v", string(key), string(value), err))
 		return
 	}
@@ -128,8 +134,10 @@ func (node *KVNode) getHandler(conn redcon.Conn, cmd redcon.Command) {
 		return
 	}
 	key := cmd.Args[1]
+	go node.CountRead()
 	value, err := node.Read(key)
 	if err != nil {
+		go node.CountErrRead()
 		conn.WriteError(fmt.Sprintf("ERR could not get %s", string(key)))
 		return
 	}
@@ -159,4 +167,10 @@ func (node *KVNode) configHandler(conn redcon.Conn, cmd redcon.Command) {
 
 func (node *KVNode) commonHandler(conn redcon.Conn, cmd redcon.Command) {
 	conn.WriteError("ERR unsupported operation:" + string(cmd.Args[0]))
+}
+
+func (node *KVNode) closeHanlder(conn redcon.Conn, cmd redcon.Command) {
+	conn.WriteString("terminating server")
+	node.Close()
+	conn.Close()
 }
