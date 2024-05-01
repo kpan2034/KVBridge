@@ -53,7 +53,7 @@ import (
 // }
 
 func TestPingRequest(t *testing.T) {
-	teardownTest, node1, _, _ := setupTest(t)
+	teardownTest, node1, _, _, _, _, _ := setupTest2(t, 3)
 	defer teardownTest(t)
 
 	// Perform a ping request from node1 to node2
@@ -89,30 +89,24 @@ func setupTest2(t *testing.T, rf int) (teardownTest func(t *testing.T), node1, n
 	os.RemoveAll("./testing")
 
 	// Define configs for both nodes
-	c1 := &config.Config{
-		Address:           ":6379",
-		Grpc_address:      "localhost:50051",
-		LogPath:           "stdout",
-		DataPath:          "./testing/storage",
-		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
-		ReplicationFactor: rf,
-	}
-	c2 := &config.Config{
-		Address:           ":6380",
-		Grpc_address:      "localhost:50052",
-		LogPath:           "stdout",
-		DataPath:          "./testing/storage2",
-		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
-		ReplicationFactor: rf,
-	}
-	c3 := &config.Config{
-		Address:           ":6381",
-		Grpc_address:      "localhost:50053",
-		LogPath:           "stdout",
-		DataPath:          "./testing/storage3",
-		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
-		ReplicationFactor: rf,
-	}
+	c1 := config.DefaultConfig()
+	c1.Timeout = 10000 * time.Millisecond
+	c1.LogPath = "stdout"
+	c1.DataPath = "./testing/storage1"
+
+	c2 := config.DefaultConfig()
+	c2.Address = ":6380"
+	c2.Grpc_address = "localhost:50052"
+	c2.LogPath = "stdout"
+	c2.DataPath = "./testing/storage2"
+	c2.Timeout = 10000 * time.Millisecond
+
+	c3 := config.DefaultConfig()
+	c3.Address = ":6381"
+	c3.Grpc_address = "localhost:50053"
+	c3.LogPath = "stdout"
+	c3.DataPath = "./testing/storage3"
+	c3.Timeout = 10000 * time.Millisecond
 
 	// Create and launch both KVNodes on separate goroutines
 	var err error
@@ -181,14 +175,10 @@ func TestMessager_Recover(t *testing.T) {
 		t.Logf("TestMessager_Recover failed %s", err)
 	}
 
-	c1 := &config.Config{
-		Address:           ":6379",
-		Grpc_address:      "localhost:50051",
-		LogPath:           "stdout",
-		DataPath:          "./testing/storage",
-		BootstrapServers:  []string{"localhost:50051", "localhost:50052", "localhost:50053"},
-		ReplicationFactor: 3,
-	}
+	c1 := config.DefaultConfig()
+	c1.Timeout = 10000 * time.Millisecond
+	c1.LogPath = "stdout"
+	c1.DataPath = "./testing/storage1"
 	node1_rec, node1RecCancelFunc, err := node.NewKVNode(c1)
 
 	go func() {
