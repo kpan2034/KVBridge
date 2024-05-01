@@ -24,3 +24,5 @@ go.work
 # tmp directory for storage and logs
 tmp/
 .idea
+testing/
+node/testing/

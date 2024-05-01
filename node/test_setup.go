@@ -82,7 +82,7 @@ func SetupTestEmulation(t *testing.T) (teardownTest func(t *testing.T), node1, n
 	c2.LogPath = "stdout"
 	c2.DataPath = "./testing/storage2"
 	c2.Timeout = 10000 * time.Millisecond
-	c1.BootstrapServers = []string{"localhost:50151", "localhost:50152", "localhost:50153"}
+	c2.BootstrapServers = []string{"localhost:50151", "localhost:50152", "localhost:50153"}
 
 	c3 := config.DefaultConfig()
 	c3.Address = ":6381"
@@ -90,7 +90,7 @@ func SetupTestEmulation(t *testing.T) (teardownTest func(t *testing.T), node1, n
 	c3.LogPath = "stdout"
 	c3.DataPath = "./testing/storage3"
 	c3.Timeout = 10000 * time.Millisecond
-	c1.BootstrapServers = []string{"localhost:50151", "localhost:50152", "localhost:50153"}
+	c3.BootstrapServers = []string{"localhost:50151", "localhost:50152", "localhost:50153"}
 
 	// Create and launch both KVNodes on separate goroutines
 	var err error
