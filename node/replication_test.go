@@ -8,7 +8,7 @@ import (
 )
 
 func TestMessager_ReplicateWrites(t *testing.T) {
-	teardownTest, node1, node2, node3 := setupTest(t)
+	teardownTest, node1, node2, node3, _, _, _ := setupTest2(t, 3)
 	defer teardownTest(t)
 
 	keys := []string{"1", "2", "5", "9", "10"}
@@ -58,16 +58,15 @@ func TestMessager_ReplicateWrites(t *testing.T) {
 }
 
 func TestMessager_ReconcileKey(t *testing.T) {
-	teardownTest, node1, node2, node3 := setupTest(t)
+	teardownTest, node1, node2, node3, _, _, _ := setupTest2(t, 3)
 	defer teardownTest(t)
 
 	keys := []string{"1", "2", "5", "9", "10"}
 	values := []string{"1", "2", "5", "9", "10"}
-	staleValue := []byte("0")
-
-	stale_vt := NewValueType(staleValue)
+	latestValue := []byte("XXXX")
 
 	ids := node1.ClusterIDs
+	latestVt := NewValueType(latestValue)
 
 	for _, id := range ids {
 		if id == node1.ID {
@@ -78,30 +77,31 @@ func TestMessager_ReconcileKey(t *testing.T) {
 			key := []byte(keys[i])
 			value := []byte(values[i])
 			kt := NewKeyType(key)
-			vt := NewValueType(value)
 
-			// Write invalid key value pair to local storage
-			err := node1.Storage.Set(key, staleValue)
-			if err != nil {
-				t.Errorf("error writing to node %v: (key: %v, value: %v)", node1.ID, key, staleValue)
-			}
 			// Write correct key value pairs to local storage of other nodes
-			err = node2.Storage.Set(key, vt.Encode())
+			err := node2.WriteWithReplicate(key, value, false)
 			if err != nil {
 				t.Errorf("error writing to node %v: (key: %v, value: %v)", node2.ID, key, value)
 			}
-			err = node3.Storage.Set(key, vt.Encode())
+			err = node2.WriteWithReplicate(key, value, false)
 			if err != nil {
 				t.Errorf("error writing to node %v: (key: %v, value: %v)", node3.ID, key, value)
 			}
+
+			// Write latest key value pair to local storage
+			err = node1.WriteWithReplicate(key, latestValue, false)
+			if err != nil {
+				t.Errorf("error writing to node %v: (key: %v, value: %v)", node1.ID, key, latestValue)
+			}
+
 			// reconcile value from other nodes
-			majValue, err := node1.ReconcileKeyValue(kt, stale_vt)
+			reconciledValue, err := node1.ReconcileKeyValue(kt, latestVt)
 			if err != nil {
 				t.Errorf("error making request: %v", err)
 			}
 
-			if !bytes.Equal(majValue, value) {
-				t.Errorf("node %v: expected reconciled value: %v, got: %v", node1.ID, majValue, value)
+			if !bytes.Equal(reconciledValue, latestValue) {
+				t.Errorf("node %v: expected reconciled value: %v, got: %v", node1.ID, reconciledValue, latestValue)
 			}
 		}
 	}
