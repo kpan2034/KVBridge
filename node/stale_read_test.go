@@ -15,10 +15,10 @@ import (
 	toxiproxy "github.com/Shopify/toxiproxy/v2/client"
 )
 
-var toxiClient *toxiproxy.Client
-var proxies []*toxiproxy.Proxy
+// var toxiClient *toxiproxy.Client
+// var proxies []*toxiproxy.Proxy
 
-func initToxiProxy() {
+func initToxiProxyBenchmark() {
 	if toxiClient != nil {
 		// since we only initialize once
 		return
@@ -164,7 +164,7 @@ func BenchmarkNode_StaleReadTest(t *testing.B) {
 
 	// set up toxiproxy
 
-	initToxiProxy()
+	initToxiProxyBenchmark()
 	// Okay actual test starts here lol
 
 	// Setup "client" reads and writes
