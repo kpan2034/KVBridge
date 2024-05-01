@@ -30,17 +30,25 @@ func (node *KVNode) Read(key []byte) ([]byte, error) {
 
 	// We send the entire value over, include version information
 	// TODO: do this async for speedup
-	val, err := node.ReconcileKeyValue(kt, vt)
-	// TODO: if this errors out, check if you can serve the local value directly
-	if err != nil {
+	// val, err := node.ReconcileKeyValue(kt, vt)
+	resChan := make(chan []byte, 1)
+	errChan := make(chan error, 1)
+	go node.ReconcileKeyValueAsync(kt, vt, resChan, errChan)
+	select {
+	case val := <-resChan:
+		return val, nil
+	case err := <-errChan:
 		return nil, err
 	}
-
-	// extract the actual value from majorityValue
-	// majorityValue, err := DecodeToValueType(val)
 	// if err != nil {
 	// 	return nil, err
 	// }
-
-	return val, nil
+	//
+	// // extract the actual value from majorityValue
+	// // majorityValue, err := DecodeToValueType(val)
+	// // if err != nil {
+	// // 	return nil, err
+	// // }
+	//
+	// return val, nil
 }

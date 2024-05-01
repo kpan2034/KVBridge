@@ -3,6 +3,7 @@ package node
 import (
 	"KVBridge/proto/compiled/replication"
 	. "KVBridge/types"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -83,6 +84,80 @@ func (m *Messager) ReplicateWrites(key *KeyType, value *ValueType) (nacks int, e
 	}
 }
 
+// Initiates ReplicateWriteRequest
+func (m *Messager) ReplicateWritesAsync(key *KeyType, value *ValueType, callerErrChan chan error) {
+	m.Logger.Debugf("replicating write: (%v, %v)", key, value)
+
+	acks := make(chan struct{}, m.N)    // struct{} is apparently a null kinda value
+	errChan := make(chan struct{}, m.N) // This channel buffer size may not be ideal for large clusters
+
+	ctx, cancel := context.WithTimeout(context.TODO(), m.Config.Timeout)
+	defer cancel()
+
+	partitions, _ := m.node.Partitioner.GetPartitions(key.Key()) // this can never return an error
+	for _, id := range partitions {
+		m.Logger.Debugf("replicating to node:%v, timeout: %s", id, m.Config.Timeout)
+		go func(id NodeID) {
+			if id == m.ID {
+				acks <- struct{}{}
+				return
+			}
+
+			in := &replication.ReplicateWriteRequest{
+				Key:   key.Encode(),
+				Value: value.Encode(),
+			}
+			cl := m.getClient(id)
+			resp, err := cl.ReplicateWrite(ctx, in)
+			if err != nil {
+				m.Logger.Errorf("replicate to node:%v: failed: %v", id, err)
+				errChan <- struct{}{}
+				return
+			}
+
+			switch resp.GetResp().(type) {
+			case *replication.ReplicateWriteResponse_Ok:
+				m.Logger.Debugf("replicate to node:%v: ok", id)
+				acks <- struct{}{}
+
+			case *replication.ReplicateWriteResponse_Value:
+				m.Logger.Errorf("replicate to node:%v: failed", id)
+				errChan <- struct{}{}
+			}
+		}(id)
+	}
+
+	req_acks := m.GetWriteThreshold()
+	num_acks := 0
+	num_errs := 0 // you can calc this using resps and acks btw
+
+	for {
+		select {
+		case <-acks:
+			num_acks++
+			m.Logger.Debugf("ack on ackChan, num_acks: %d", num_acks)
+			if num_acks >= req_acks {
+				callerErrChan <- nil
+			}
+			// TODO: attept to finish replicating everywhere else
+
+		case <-errChan:
+			num_errs++
+			m.Logger.Debugf("err on errChan, num_errs: %d, num_acks: %d", num_errs, num_acks)
+			// if too many errors, then fail
+			if num_errs > (m.N - req_acks) {
+				callerErrChan <- ErrReplicateWriteFailed
+				return
+			}
+
+		case <-ctx.Done():
+			m.Logger.Debugf("context done, errs: %d, acks: %d", num_errs, num_acks)
+			callerErrChan <- ErrTimeout
+			return
+		}
+	}
+}
+
 // Gets value of a keys from all nodes, and returns the majority value.
 // If no majority value exists then returns votedValue is nil
 // If the node calling ReconcileKeyValue does not have a value associated with the provided key
@@ -107,7 +182,8 @@ func (m *Messager) ReconcileKeyValue(key *KeyType, myValue *ValueType) (votedVal
 	ctx, cancel := context.WithTimeout(context.TODO(), m.Config.Timeout)
 	defer cancel()
 
-	for _, id := range m.ClusterIDs {
+	partitions, _ := m.node.Partitioner.GetPartitions(key.Key()) // this can never return an error
+	for _, id := range partitions {
 		if id == m.ID {
 			valChan <- valWithId{myValue, id}
 			continue
@@ -167,6 +243,98 @@ func (m *Messager) ReconcileKeyValue(key *KeyType, myValue *ValueType) (votedVal
 		case <-ctx.Done():
 			m.Logger.Debugf("context done, errs: %d, acks: %d", num_errs, num_acks)
 			return nil, ErrTimeout
+		}
+	}
+
+	// Add returned value to the vote map
+	// We ignore versions when voting
+
+}
+
+// Gets value of a keys from all nodes, and returns the majority value.
+// If no majority value exists then returns votedValue is nil
+// If the node calling ReconcileKeyValue does not have a value associated with the provided key
+// then myValue can be nil
+func (m *Messager) ReconcileKeyValueAsync(key *KeyType, myValue *ValueType, res chan []byte, callerErrChan chan error) {
+	m.Logger.Debugf("reconciling value of key: %s", key)
+
+	type valWithId struct {
+		vt *ValueType
+		id NodeID
+	}
+	valChan := make(chan valWithId, m.N)
+	errChan := make(chan struct{})
+
+	ctx, cancel := context.WithTimeout(context.TODO(), m.Config.Timeout)
+	defer cancel()
+
+	partitions, _ := m.node.Partitioner.GetPartitions(key.Key()) // this can never return an error
+	for _, id := range partitions {
+		if id == m.ID {
+			valChan <- valWithId{myValue, id}
+			continue
+		}
+
+		go func(id NodeID) {
+			// Make the request
+			in := &replication.GetKeyRequest{
+				Key: key.Encode(),
+			}
+
+			cl := m.getClient(id)
+			resp, err := cl.GetKey(ctx, in)
+			if err != nil {
+				m.Logger.Errorf("error getting value of key from node %v: %v", id, err)
+				errChan <- struct{}{}
+				return
+			}
+			ok := resp.GetOk()
+			value := resp.GetValue()
+
+			// decode value to value type
+			vt, err := DecodeToValueType(value)
+			if err != nil {
+				m.Logger.Errorf("error decoding value of key from node %v: %v", id, err)
+				errChan <- struct{}{}
+				return
+			}
+			m.Logger.Debugf("node %v (ok:%v) returned (key: %v, value: %v)", id, ok, key, vt)
+			valChan <- valWithId{vt, id}
+		}(id)
+	}
+
+	req_acks := m.GetReadThreshold()
+	num_acks := 0
+	num_errs := 0 // you can calc this using resps and acks btw
+
+	var valueToReturn ValueType
+	for {
+		select {
+		case val := <-valChan:
+			num_acks++
+			m.Logger.Debugf("got ack: val to return: %#v, val:%#v, num_acks: %d", &valueToReturn, val.vt, num_acks)
+			if m.node.ShouldUpdate(&valueToReturn, val.vt, val.id) {
+				m.Logger.Debugf("updating val to return")
+				valueToReturn = *val.vt
+			}
+			if num_acks >= req_acks {
+				res <- valueToReturn.Value()
+				if !bytes.Equal(valueToReturn.Value(), myValue.Value()) {
+					m.Logger.Debugf("updating val async after return")
+					m.node.WriteWithReplicate(key.Key(), valueToReturn.Value(), false)
+				}
+			}
+		case <-errChan:
+			num_errs++
+			// if too many errors, then fail
+			if num_errs > (m.N - req_acks) {
+				callerErrChan <- ErrReconcileReadFailed
+				return
+			}
+		case <-ctx.Done():
+			m.Logger.Debugf("context done, errs: %d, acks: %d", num_errs, num_acks)
+			callerErrChan <- ErrTimeout
+			return
 		}
 	}
 

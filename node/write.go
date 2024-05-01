@@ -49,12 +49,14 @@ func (node *KVNode) WriteWithReplicate(key []byte, value []byte, replicate bool)
 
 	if replicate {
 		// replicate write to other node
-		nacks, err := node.ReplicateWrites(kt, vt)
+		errChan := make(chan error, 1)
+		// nacks, err := node.ReplicateWrites(kt, vt)
+		go node.ReplicateWritesAsync(kt, vt, errChan)
+		err := <-errChan
 		if err != nil {
 			// just error out for now, later should just log
 			return err
 		}
-		node.Logger.Debugf("replicated to %d other nodes", nacks)
 	}
 	return nil
 }
