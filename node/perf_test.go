@@ -20,10 +20,7 @@ var jitter int = 2         // milliseconds
 var num_gets = 100
 var num_sets = 100
 
-var toxiClient *toxiproxy.Client
-var proxies []*toxiproxy.Proxy
-
-func initToxiProxy() {
+func initToxiProxyPerf() {
 	if toxiClient != nil {
 		// since we only initialize once
 		return
@@ -97,7 +94,7 @@ func initToxiProxy() {
 
 func SetupTestEmulation2(t *testing.T) (teardownTest func(t *testing.T), node1, node2, node3 *KVNode, f1, f2, f3 func()) {
 	os.RemoveAll("./testing")
-	initToxiProxy()
+	initToxiProxyPerf()
 
 	// Define configs for both nodes
 	c1 := config.DefaultConfig()
