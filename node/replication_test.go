@@ -5,6 +5,7 @@ import (
 	. "KVBridge/types"
 	"bytes"
 	"testing"
+	"time"
 )
 
 func TestMessager_ReplicateWrites(t *testing.T) {
@@ -66,7 +67,6 @@ func TestMessager_ReconcileKey(t *testing.T) {
 	latestValue := []byte("XXXX")
 
 	ids := node1.ClusterIDs
-	latestVt := NewValueType(latestValue)
 
 	for _, id := range ids {
 		if id == node1.ID {
@@ -83,10 +83,13 @@ func TestMessager_ReconcileKey(t *testing.T) {
 			if err != nil {
 				t.Errorf("error writing to node %v: (key: %v, value: %v)", node2.ID, key, value)
 			}
-			err = node2.WriteWithReplicate(key, value, false)
+			err = node3.WriteWithReplicate(key, value, false)
 			if err != nil {
 				t.Errorf("error writing to node %v: (key: %v, value: %v)", node3.ID, key, value)
 			}
+
+			time.Sleep(10 * time.Millisecond) // ensures latestVt gets higher version
+			latestVt := NewValueType(latestValue)
 
 			// Write latest key value pair to local storage
 			err = node1.WriteWithReplicate(key, latestValue, false)
@@ -101,7 +104,7 @@ func TestMessager_ReconcileKey(t *testing.T) {
 			}
 
 			if !bytes.Equal(reconciledValue, latestValue) {
-				t.Errorf("node %v: expected reconciled value: %v, got: %v", node1.ID, reconciledValue, latestValue)
+				t.Errorf("node %v: expected reconciled value: %v, got: %v", node1.ID, latestValue, reconciledValue)
 			}
 		}
 	}
