@@ -36,14 +36,21 @@ func NewZapLogger(logPath string, level LogLevel) Logger {
 		config = zap.NewProductionConfig()
 	}
 
+	if logPath == "" {
+		config = zap.NewProductionConfig()
+		config.Level.SetLevel(zap.FatalLevel)
+	}
+
 	if logPath != "" && logPath != "stdout" {
 		err := os.MkdirAll(filepath.Dir(logPath), os.ModePerm)
 		if err != nil {
 			log.Fatalf("could not open logfile: %v", err)
 		}
+		config.OutputPaths = []string{logPath}
 	}
-
-	config.OutputPaths = []string{logPath}
+	if logPath == "stdout" {
+		config.OutputPaths = []string{"stdout"}
+	}
 
 	sugar, err := config.Build()
 	if err != nil {

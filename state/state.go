@@ -65,9 +65,9 @@ func (s *Stats) AddDelay(d uint64) {
 }
 
 func (s *Stats) MeasureDelay(vt ValueType) {
-	diff := NewTimestamp().Uint64() - vt.Version().Uint64()
+	diff := int64(NewTimestamp().Uint64()) - int64(vt.Version().Uint64())
 	if diff >= 0 {
-		s.AddDelay(diff)
+		s.AddDelay(uint64(diff))
 		s.CountReplicate()
 	}
 }
@@ -84,12 +84,12 @@ func (s *Stats) PrintStatHelper() {
 
 func (s *Stats) String() string {
 	d := time.Duration(s.TotalDelay.Load() / s.NumReplicate.Load())
-	str := fmt.Sprintf("reads:%d\terr_reads:%d\twrites:%d\terr_writes:%d\taverage_delay:%dms\treplicate_requests:%d",
+	str := fmt.Sprintf("reads:%d\terr_reads:%d\twrites:%d\terr_writes:%d\taverage_lag:%s\treplicate_requests:%d",
 		s.NumReads.Load(),
 		s.ErrReads.Load(),
 		s.NumWrites.Load(),
 		s.ErrWrites.Load(),
-		d.Milliseconds(),
+		d,
 		s.NumReplicate.Load())
 
 	return str

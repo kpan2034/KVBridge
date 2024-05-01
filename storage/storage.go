@@ -53,16 +53,16 @@ func (pb *PebbleStorageManager) Init() (err error) {
  */
 func (pb *PebbleStorageManager) Set(key []byte, value []byte) error {
 	pb.Debugf("set request: key: %v, value: %v", string(key), string(value))
-	err := pb.db.Set(key, value, &pebble.WriteOptions{})
+	err := pb.db.Set(key, value, &pebble.WriteOptions{Sync: true})
 	if err != nil {
 		return err
 	}
 
 	// Flush it always for now -- need to change this obv
-	err = pb.db.Flush()
-	if err != nil {
-		return err
-	}
+	//err = pb.db.Flush()
+	//if err != nil {
+	//	return err
+	//}
 	pb.Debugf("set response: %v", err)
 	return nil
 }

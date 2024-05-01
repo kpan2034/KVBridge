@@ -26,7 +26,6 @@ func (m *Messager) ReplicateWrite(ctx context.Context, in *replication.Replicate
 	if err != nil {
 		return nil, err
 	}
-
 	// measure delay here
 	m.node.State.MeasureDelay(*incomingVt)
 
@@ -49,7 +48,6 @@ func (m *Messager) ReplicateWrite(ctx context.Context, in *replication.Replicate
 		return nil, err
 	}
 	shouldUpdate := m.node.ShouldUpdate(myValueVt, incomingVt, incomingID)
-
 	if !shouldUpdate {
 		// Respond with our version
 		return &replication.ReplicateWriteResponse{
