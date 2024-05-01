@@ -2,7 +2,6 @@ package node
 
 import (
 	"fmt"
-
 	"github.com/tidwall/redcon"
 )
 
@@ -23,6 +22,7 @@ func (node *KVNode) getNewClientServer() *redcon.Server {
 	mux.HandleFunc("subscribe", node.commonHandler)
 	mux.HandleFunc("psubscribe", node.commonHandler)
 	mux.HandleFunc("close", node.closeHanlder)
+	mux.HandleFunc("recover", node.recoverHandler)
 
 	srv := redcon.NewServer(addr,
 		func(conn redcon.Conn, cmd redcon.Command) {
@@ -173,4 +173,12 @@ func (node *KVNode) closeHanlder(conn redcon.Conn, cmd redcon.Command) {
 	conn.WriteString("terminating server")
 	node.Close()
 	conn.Close()
+}
+
+func (node *KVNode) recoverHandler(conn redcon.Conn, cmd redcon.Command) {
+	err := node.Recover()
+	if err != nil {
+		conn.WriteError("Recovery failed")
+	}
+	conn.WriteString("OK")
 }
