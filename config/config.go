@@ -43,8 +43,8 @@ type Config struct {
 	Timeout time.Duration `koanf:"timeout"`
 
 	// For internal use
-	readThreshold  int
-	writeThreshold int
+	ReadThreshold  int
+	WriteThreshold int
 }
 
 func DefaultConfig() *Config {
@@ -58,8 +58,8 @@ func DefaultConfig() *Config {
 		ReadPreference:    OpMajority,
 		WritePreference:   OpMajority,
 		Timeout:           defaultTimeoutMs,
-		readThreshold:     2,
-		writeThreshold:    2,
+		ReadThreshold:     2,
+		WriteThreshold:    2,
 	}
 }
 
@@ -116,21 +116,21 @@ func NewConfigFromEnv() *Config {
 		log.Fatalf("could not unmarshall config: %v", err)
 	}
 
-	config.setReadThreshold()
-	config.setWriteThreshold()
+	config.SetReadThreshold()
+	config.SetWriteThreshold()
 
 	return config
 }
 
 func (config *Config) GetReadThreshold() int {
-	return config.readThreshold
+	return config.ReadThreshold
 }
 
 func (config *Config) GetWriteThreshold() int {
-	return config.writeThreshold
+	return config.WriteThreshold
 }
 
-func (config *Config) setReadThreshold() {
+func (config *Config) SetReadThreshold() {
 	threshold := 0
 	N := len(config.BootstrapServers)
 	// There is a more optimal way of doing this -- but using bit manips are out of the purview of our deadline
@@ -144,10 +144,10 @@ func (config *Config) setReadThreshold() {
 	default:
 		log.Fatalf("invalid read preference specified: %v", config.ReadPreference)
 	}
-	config.readThreshold = threshold
+	config.ReadThreshold = threshold
 }
 
-func (config *Config) setWriteThreshold() {
+func (config *Config) SetWriteThreshold() {
 	threshold := 0
 	N := len(config.BootstrapServers)
 	switch config.WritePreference {
@@ -160,5 +160,5 @@ func (config *Config) setWriteThreshold() {
 	default:
 		log.Fatalf("invalid write preference specified: %v", config.ReadPreference)
 	}
-	config.writeThreshold = threshold
+	config.WriteThreshold = threshold
 }
