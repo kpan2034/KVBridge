@@ -302,3 +302,185 @@ func BenchmarkNode_StaleReadTest(t *testing.B) {
 
 	t.Logf("Avg Staleness: %f\tnumRequests: %d\tnumStaleReads: %d\tnumErrs: %d\t", float32(numStaleReads)/float32(numRequests), numRequests, numStaleReads, numErrs)
 }
+
+func BenchmarkNode_Recover(t *testing.B) {
+
+	t.StopTimer()
+	// start node 1, 2, 3
+	os.RemoveAll("./testing")
+
+	// Define configs for both nodes
+	c1 := config.DefaultConfig()
+	c1.Timeout = 1000 * time.Millisecond
+	c1.Grpc_address = "localhost:50051"
+	c1.LogPath = ""
+	c1.DataPath = "./testing/storage1"
+	c1.BootstrapServers = []string{"localhost:50151", "localhost:50152", "localhost:50153"}
+	c1.WritePreference = types.OpLocal
+	c1.ReadPreference = types.OpLocal
+	c1.SetWriteThreshold()
+	c1.SetReadThreshold()
+
+	// "reference" node -- fetches from all
+	c2 := config.DefaultConfig()
+	c2.Address = ":6380"
+	c2.Grpc_address = "localhost:50052"
+	c2.LogPath = ""
+	c2.DataPath = "./testing/storage2"
+	c2.Timeout = 1000 * time.Millisecond
+	c2.BootstrapServers = []string{"localhost:50151", "localhost:50152", "localhost:50153"}
+	c2.WritePreference = types.OpLocal
+	c2.ReadPreference = types.OpLocal
+	c2.SetWriteThreshold()
+	c2.SetReadThreshold()
+
+	c3 := config.DefaultConfig()
+	c3.Address = ":6381"
+	c3.Grpc_address = "localhost:50053"
+	c3.LogPath = ""
+	c3.DataPath = "./testing/storage3"
+	c3.Timeout = 1000 * time.Millisecond
+	c3.BootstrapServers = []string{"localhost:50151", "localhost:50152", "localhost:50153"}
+	c3.WritePreference = types.OpMajority
+	c3.ReadPreference = types.OpMajority
+	c3.SetWriteThreshold()
+	c3.SetReadThreshold()
+
+	// Create and launch all KVNodes on separate goroutines
+	var err error
+	node1, cancelFunc1, err := node.NewKVNode(c1)
+	if err != nil {
+		t.Errorf("node1 creation failed: %v", err)
+	}
+	node2, cancelFunc2, err := node.NewKVNode(c2)
+	if err != nil {
+		t.Errorf("node2 creation failed: %v", err)
+	}
+	node3, cancelFunc3, err := node.NewKVNode(c3)
+	if err != nil {
+		t.Errorf("node3 creation failed: %v", err)
+	}
+
+	// Launch both servers
+	go func() {
+		err := node1.Start()
+		if err != nil {
+			t.Errorf("node1 failed: %v", err)
+		}
+	}()
+
+	go func() {
+		err := node2.Start()
+		if err != nil {
+			t.Errorf("node2 failed: %v", err)
+		}
+	}()
+
+	go func() {
+		err := node3.Start()
+		if err != nil {
+			t.Errorf("node3 failed: %v", err)
+		}
+	}()
+
+	// Wait for servers to come up
+	time.Sleep(2000 * time.Millisecond)
+
+	teardownTest := func(t *testing.B) {
+		//os.RemoveAll("./testing")
+		//cancelFunc1()
+		cancelFunc2()
+		cancelFunc3()
+	}
+
+	defer teardownTest(t)
+
+	// set up toxiproxy
+
+	initToxiProxy()
+	// Okay actual test starts here lol
+
+	// Setup "client" reads and writes
+	//
+	// Define the range of keys that will be picked
+	maxKey := int64(100000)
+
+	// note: values will always be between those too as well
+	//latestValue := make(map[string]string)
+
+	writeFunc := func(key string, value string) {
+		// Write this to node 3 always
+		node3.Write([]byte(key), []byte(value))
+	}
+
+	//readFunc := func(key, value string) {
+	//	counter := 0
+	//	ticker := time.NewTicker(10 * time.Millisecond)
+	//	defer ticker.Stop()
+	//	timeout := time.NewTimer(5 * time.Second)
+	//	defer timeout.Stop()
+	//	for {
+	//		select {
+	//		case <-ticker.C:
+	//			// Read this from node 1 always
+	//			res, err := node1.Read([]byte(key))
+	//			if err != nil {
+	//				errChan <- err
+	//			}
+	//			if string(res) == (value) {
+	//				resChan <- counter
+	//				return
+	//			}
+	//			counter++
+	//
+	//		case <-timeout.C:
+	//			resChan <- -1
+	//			return
+	//		}
+	//	}
+	//}
+
+	// mutex for the map
+	//var mu sync.Mutex
+
+	// looper
+	looper := func() {
+		// generate a random key between the given ranges
+		keyInt := rand.Int64N(maxKey)
+		valueInt := rand.Int64()
+		key := strconv.FormatInt(keyInt, 10)
+		value := strconv.FormatInt(valueInt, 10)
+		//mu.Lock()
+		//latestValue[key] = value
+		//mu.Unlock()
+		writeFunc(key, value)
+	}
+
+	// call looper in a loop async
+	maxRequests := 10000
+	cancelFunc1()
+	time.Sleep(200 * time.Millisecond)
+	for i := 0; i < maxRequests; i++ {
+		//t.Logf("request: %d", i)
+		looper()
+		//t.Logf("done: %d", i)
+	}
+	// Launch both servers
+	node1, cancelFunc4, _ := node.NewKVNode(c1)
+	defer cancelFunc4()
+	go func() {
+		err := node1.Start()
+		if err != nil {
+			t.Errorf("node1 failed: %v", err)
+		}
+	}()
+
+	time.Sleep(2000 * time.Millisecond)
+
+	t.StartTimer()
+	err = node1.Recover()
+	if err != nil {
+		return
+	}
+	t.StopTimer()
+}
