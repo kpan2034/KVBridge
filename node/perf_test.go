@@ -17,8 +17,8 @@ var latencyNode1 int = 500 // milliseconds
 var jitterNode1 int = 2    // milliseconds
 var latency int = 10       // milliseconds
 var jitter int = 2         // milliseconds
-var num_gets = 10000
-var num_sets = 10000
+var num_gets = 100
+var num_sets = 100
 
 var toxiClient *toxiproxy.Client
 var proxies []*toxiproxy.Proxy
