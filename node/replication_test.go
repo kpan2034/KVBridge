@@ -9,7 +9,8 @@ import (
 )
 
 func TestMessager_ReplicateWrites(t *testing.T) {
-	teardownTest, node1, node2, node3, _, _, _ := setupTest2(t, 3)
+	//teardownTest, node1, node2, node3, _, _, _ := setupTest2(t, 3)
+	teardownTest, node1, node2, node3, _, _, _ := node.SetupTestEmulation(t)
 	defer teardownTest(t)
 
 	keys := []string{"1", "2", "5", "9", "10"}
@@ -59,7 +60,8 @@ func TestMessager_ReplicateWrites(t *testing.T) {
 }
 
 func TestMessager_ReconcileKey(t *testing.T) {
-	teardownTest, node1, node2, node3, _, _, _ := setupTest2(t, 3)
+	//teardownTest, node1, node2, node3, _, _, _ := setupTest2(t, 3)
+	teardownTest, node1, node2, node3, _, _, _ := node.SetupTestEmulation(t)
 	defer teardownTest(t)
 
 	keys := []string{"1", "2", "5", "9", "10"}

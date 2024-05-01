@@ -45,28 +45,28 @@ func initToxiProxy() {
 		return
 	}
 	proxies = []*toxiproxy.Proxy{p1, p2, p3}
-}
-
-func SetupTestEmulation(t *testing.T) (teardownTest func(t *testing.T), node1, node2, node3 *KVNode, f1, f2, f3 func()) {
-	os.RemoveAll("./testing")
-	initToxiProxy()
 	toxicity := float32(1.0) // Ratio of requests to which proxy rules are applied
-	latency := 1000          // milliseconds
+	latency := 10            // milliseconds
 	jitter := 2              // milliseconds
 
 	for _, p := range proxies {
-		_, err := p.AddToxic("latency_down", "latency", "downstream", toxicity, toxiproxy.Attributes{
+		_, err := p.AddToxic("latency_down", "latency", "upstream", toxicity, toxiproxy.Attributes{
 			"latency": latency,
 			"jitter":  jitter,
 		})
 		if err != nil {
-			t.Errorf("Toxiproxy failed to add toxic %s", err)
+			log.Printf("Toxiproxy failed to add toxic %s", err)
 		}
 		err = p.Enable()
 		if err != nil {
 			return
 		}
 	}
+}
+
+func SetupTestEmulation(t *testing.T) (teardownTest func(t *testing.T), node1, node2, node3 *KVNode, f1, f2, f3 func()) {
+	os.RemoveAll("./testing")
+	initToxiProxy()
 
 	// Define configs for both nodes
 	c1 := config.DefaultConfig()
@@ -137,8 +137,5 @@ func SetupTestEmulation(t *testing.T) (teardownTest func(t *testing.T), node1, n
 		cancelFunc1()
 		cancelFunc2()
 		cancelFunc3()
-		for _, p := range proxies {
-			p.Delete()
-		}
 	}, node1, node2, node3, cancelFunc1, cancelFunc2, cancelFunc3
 }
