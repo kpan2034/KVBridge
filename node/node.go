@@ -54,7 +54,7 @@ func (kvNode *KVNode) getRecoverNode(keyrangeLB types.NodeID, keyrangeUB types.N
 // Recover Synchronizes divergent replicas (could be due to failures)
 // Utilizes Anti-entropy (Merkle trees) for efficiency
 func (kvNode *KVNode) Recover() error {
-
+	kvNode.Logger.Debugf("Initiating recovery on %v", kvNode.ID)
 	if kvNode.Environment.State.ReplicationFactor <= 1 {
 		kvNode.Environment.Logger.Errorf("Replication Factor is %d, can not recover", kvNode.Environment.State.ReplicationFactor)
 		return errors.New("Replication Factor <=1, can not recover")
@@ -111,6 +111,7 @@ func (kvNode *KVNode) Recover() error {
 	if err != nil {
 		return err
 	}
+	kvNode.Logger.Debugf("Recovery complete on %v", kvNode.ID)
 	return nil
 }
 

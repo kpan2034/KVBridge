@@ -3,6 +3,7 @@ package node_test
 import (
 	"KVBridge/config"
 	"KVBridge/node"
+	"KVBridge/types"
 	"context"
 	"math"
 	"os"
@@ -158,8 +159,8 @@ func setupTest2(t *testing.T, rf int) (teardownTest func(t *testing.T), node1, n
 }
 
 func TestMessager_Recover(t *testing.T) {
-	//_, node1, node2, _, cancelFunc1, cancelFunc2, cancelFunc3 := setupTest2(t, 3)
-	_, node1, node2, _, cancelFunc1, cancelFunc2, cancelFunc3 := node.SetupTestEmulation(t)
+	_, node1, node2, node3, cancelFunc1, cancelFunc2, cancelFunc3 := setupTest2(t, 3)
+	//_, node1, node2, node3, cancelFunc1, cancelFunc2, cancelFunc3 := node.SetupTestEmulation(t)
 
 	err := node1.Write([]byte("testKey1"), []byte("testVal1"))
 	if err != nil {
@@ -171,6 +172,9 @@ func TestMessager_Recover(t *testing.T) {
 	}
 
 	cancelFunc1()
+	node2.Environment.State.IDMap[node1.ID].Status = types.StatusDOWN
+	node3.Environment.State.IDMap[node1.ID].Status = types.StatusDOWN
+
 	err = node2.Write([]byte("testKey2"), []byte("testVal2"))
 	if err != nil {
 		// TODO: node2 currently tries to connect to node 1 and fails!
@@ -192,6 +196,8 @@ func TestMessager_Recover(t *testing.T) {
 
 	// Wait for servers to come up
 	time.Sleep(1000 * time.Millisecond)
+	node2.Environment.State.IDMap[node1_rec.ID].Status = types.StatusUP
+	node3.Environment.State.IDMap[node1_rec.ID].Status = types.StatusUP
 
 	if getNumRecords(node1_rec, t) != 1 || getNumRecords(node2, t) != 2 {
 		t.Errorf("Node1 (Before Recover) Records: Expected %d Actual %d \nNode2 Records: Expected %d Actual %d",
