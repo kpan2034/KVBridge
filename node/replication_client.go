@@ -22,7 +22,8 @@ func (m *Messager) ReplicateWrites(key *KeyType, value *ValueType) (nacks int, e
 	ctx, cancel := context.WithTimeout(context.TODO(), m.Config.Timeout)
 	defer cancel()
 
-	for _, id := range m.ClusterIDs {
+	partitions, _ := m.node.Partitioner.GetPartitions(key.Key()) // this can never return an error
+	for _, id := range partitions {
 		m.Logger.Debugf("replicating to node:%v, timeout: %s", id, m.Config.Timeout)
 		go func(id NodeID) {
 			if id == m.ID {

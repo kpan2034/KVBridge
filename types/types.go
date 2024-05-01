@@ -47,3 +47,9 @@ const (
 	OpMajorityStr                    = "majority"
 	OpAllStr                         = "all"
 )
+
+func (nr *NodeRange) InRange(hashedKey NodeID) bool {
+	return true
+	// return (nr.StartHash <= hashedKey && hashedKey <= nr.EndHash) ||
+	// 	(hashedKey <= nr.StartHash && nr.EndHash <= hashedKey)
+}
