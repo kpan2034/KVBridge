@@ -159,8 +159,8 @@ func setupTest2(t *testing.T, rf int) (teardownTest func(t *testing.T), node1, n
 }
 
 func TestMessager_Recover(t *testing.T) {
-	_, node1, node2, node3, cancelFunc1, cancelFunc2, cancelFunc3 := setupTest2(t, 3)
-	//_, node1, node2, node3, cancelFunc1, cancelFunc2, cancelFunc3 := node.SetupTestEmulation(t)
+	//_, node1, node2, node3, cancelFunc1, cancelFunc2, cancelFunc3 := setupTest2(t, 3)
+	_, node1, node2, node3, cancelFunc1, cancelFunc2, cancelFunc3 := node.SetupTestEmulation(t)
 
 	err := node1.Write([]byte("testKey1"), []byte("testVal1"))
 	if err != nil {
