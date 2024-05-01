@@ -5,6 +5,7 @@ go 1.22.1
 toolchain go1.22.2
 
 require (
+	github.com/Shopify/toxiproxy/v2 v2.9.0
 	github.com/cockroachdb/pebble v1.1.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0
 	github.com/knadh/koanf v1.5.0
@@ -15,11 +16,6 @@ require (
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.63.2
 	google.golang.org/protobuf v1.33.0
-)
-
-require (
-	github.com/Shopify/toxiproxy/v2 v2.9.0
-	github.com/garyburd/redigo v1.6.4
 )
 
 require (
