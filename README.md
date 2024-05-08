@@ -1,29 +1,40 @@
 # KVBridge, a Practical Key-Value store.
 
-## Basic roadmap:
 
-1. Have Key-Value APIs up and running for a single node. Storage can be non-persistent, in memory.
+## Building
+Clone the repository to your system, cd into the directory and run `make`:
 
-Should we design APIs using gRPC or RESP?
 
-Basic commands to support (taken from Redis)
+```
+git clone https://github.com/kpan2034/KVBridge.git
+cd KVBridge
+make build
+```
 
-- SET
-- GET
-- DEL
-- PING
+This creates a binary called `kvbridge` in the same directory.
 
-- QUIT
-- PUB
-- SUB
+## Running
 
-We could go with [this library](https://github.com/tidwall/redcon) for client-server communication.
+Executing the above binary starts a new KVbridge process with the default configuration.
+You can specify the configuration file using the `--conf` parameter:
 
-2. Set up storage engine. Probably using [RocksDB](https://github.com/facebook/rocksdb.git) or [FASTER]()
-3. Set up communication between nodes. Only basic client redirection handling. Single leader, no fail-over, no consensus, no replication.
+```
+./kvbridge --conf config.yaml
+```
 
-4. Add basic replication between nodes, using [this Raft library](https://github.com/etcd-io/raft):
+Use `-h` to see additional parameters that you can specify from the command line:
 
-5. Add read-replica support.
+```
+./kvbridge -h
+      --address string             address for server to listen for client (default ":6379")
+      --bootstrap_servers string   bootstrap servers in the cluster (default "localhost:50051,localhost:50052")
+      --conf strings               path to one or more .yaml config files to load (default [./config.yaml])
+      --data_path string           path to persistent storage (default "./tmp/storage")
+      --grpc_address string        address for server to listen for other nodes (default "localhost:50051")
+      --log_path string            path to logfile (default "./tmp/log")
+      --read_pref string           read preference for cluster (default "majority")
+      --replication_factor int     number of nodes to replicate each data point (default 3)
+      --timeout int                default timeout between nodes in ns (default 10000000000)
+      --write_pref string          write preference for cluster (default "majority")
+```
 
-6.
